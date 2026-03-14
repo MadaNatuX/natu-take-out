@@ -4,7 +4,7 @@
     <view class="pop">
       <view class="title"> 温馨提示 </view>
       <view class="tip-img">
-        <image src="../../static/images/success.png"></image>
+        <image src="../../static/images/success.gif" mode="aspectFit"></image>
       </view>
       <view class="tip-info"> 37已成功帮你催单~ </view>
       <view class="sure" @click="confirm"> 确定 </view>

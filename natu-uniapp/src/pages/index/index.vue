@@ -18,7 +18,7 @@
         <image mode="widthFix" src="../../static/images/swp3.png" />
       </swiper-item>
     </swiper>
-    <image src="../../static/images/home.png" mode="scaleToFill" />
+    <image src="../../static/images/home.gif" mode="aspectFit" />
     <view class="title" @tap="toOrderPage">点击开始点餐</view>
   </view>
 </template>

@@ -10,7 +10,7 @@
       <view class="success_desc"> 后厨正在为你准备餐品，请稍候片刻~ </view>
     </template>
     <template v-else>
-      <image src="../../static/icon/饿饿.png" mode="scaleToFill" />
+      <image src="../../static/icon/饿饿.gif" mode="aspectFit" />
       <view class="pay">支付成功</view>
       <view class="time">预计{{ arrivalTime }}送达</view>
       <view class="success_desc"> 后厨疯狂备餐ing, 请耐心等待~ </view>
