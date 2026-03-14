@@ -367,7 +367,6 @@ onBeforeUnmount(() => {
           <el-main>
             <router-view></router-view>
           </el-main>
-          <el-footer>© 2024.5.21 hanye-take-out Tech and Fun. All rights reserved.</el-footer>
         </el-container>
       </el-container>
     </el-container>
@@ -475,13 +474,6 @@ a:hover {
   color: #eee;
 }
 
-.el-footer {
-  background-color: #eee;
-  font-size: 12px;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-}
 </style>
 
 

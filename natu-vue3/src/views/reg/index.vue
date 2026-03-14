@@ -76,195 +76,229 @@ const registerFn = async () => {
 </script>
 
 <template>
-  <!-- 注册页面的整体盒子 -->
-  <div class="background">
-    <!-- 下雨效果 -->
-    <div class="rain">
-      <span style="--i:64;"></span>
-      <span style="--i:33;"></span>
-      <span style="--i:21;"></span>
-      <span style="--i:95;"></span>
-      <span style="--i:42;"></span>
-      <span style="--i:17;"></span>
-      <span style="--i:88;"></span>
-      <span style="--i:50;"></span>
-      <span style="--i:10;"></span>
-      <span style="--i:77;"></span>
-      <span style="--i:3;"></span>
-      <span style="--i:29;"></span>
-      <span style="--i:72;"></span>
-      <span style="--i:5;"></span>
-      <span style="--i:90;"></span>
-      <span style="--i:49;"></span>
-      <span style="--i:14;"></span>
-      <span style="--i:61;"></span>
-      <span style="--i:38;"></span>
-      <span style="--i:81;"></span>
-      <span style="--i:64;"></span>
-      <span style="--i:33;"></span>
-      <span style="--i:21;"></span>
-      <span style="--i:95;"></span>
-      <span style="--i:42;"></span>
-      <span style="--i:17;"></span>
-      <span style="--i:88;"></span>
-      <span style="--i:50;"></span>
-      <span style="--i:10;"></span>
-      <span style="--i:77;"></span>
-      <span style="--i:3;"></span>
-      <span style="--i:29;"></span>
-      <span style="--i:72;"></span>
-      <span style="--i:5;"></span>
-      <span style="--i:90;"></span>
-      <span style="--i:49;"></span>
-      <span style="--i:14;"></span>
-      <span style="--i:61;"></span>
-      <span style="--i:38;"></span>
-      <span style="--i:81;"></span>
-      <span style="--i:21;"></span>
-      <span style="--i:95;"></span>
-      <span style="--i:42;"></span>
-      <span style="--i:17;"></span>
-      <span style="--i:88;"></span>
-      <span style="--i:50;"></span>
-      <span style="--i:10;"></span>
-      <span style="--i:77;"></span>
-      <span style="--i:3;"></span>
-      <span style="--i:29;"></span>
-      <span style="--i:14;"></span>
-      <span style="--i:61;"></span>
-    </div>
-    <!-- 注册的盒子 -->
-    <div class="reg-box">
-      <!-- 标题“后台管理系统(图片)”的盒子 -->
-      <div class="title-box">注 册</div>
-      <!-- 注册的表单区域 -->
-      <!-- el-form 自带校验能力，所以直接自定义规则就行(不用什么自定义监听之类的) -->
-      <el-form :model="form" label-width="0px" :rules="rules" ref="registerRef">
-        <el-form-item prop="account">
-          <el-input placeholder="请输入用户名" v-model="form.account"></el-input>
-        </el-form-item>
-        <el-form-item prop="password">
-          <el-input type="password" placeholder="请输入密码" v-model="form.password"></el-input>
-        </el-form-item>
-        <el-form-item prop="repassword">
-          <el-input type="password" placeholder="请再次确认密码" v-model="form.repassword"></el-input>
-        </el-form-item>
-        <el-form-item>
-          <el-button type="primary" class="btn-reg" @click="registerFn">注册</el-button>
-          <el-link class="router" type="info" @click="router.push('/login')">去登录</el-link>
-        </el-form-item>
-      </el-form>
+  <div class="auth-page auth-page--register">
+    <div class="auth-shell">
+      <section class="auth-copy">
+        <p class="eyebrow">ADMIN CONSOLE</p>
+        <div class="brand-badge">爱吃点餐后台</div>
+        <h1 class="headline">创建后台账号</h1>
+        <p class="subhead">
+          新账号创建完成后，就可以回到登录页进入系统开始管理门店业务。
+        </p>
+        <div class="tag-list">
+          <span>菜品管理</span>
+          <span>套餐管理</span>
+          <span>营业设置</span>
+        </div>
+      </section>
+
+      <div class="auth-card">
+        <div class="card-head">
+          <div class="card-kicker">新账号创建</div>
+          <div class="card-title">注册</div>
+          <div class="card-desc">填写账号和密码，完成后台账号开通</div>
+        </div>
+
+        <el-form :model="form" label-width="0px" :rules="rules" ref="registerRef">
+          <el-form-item prop="account">
+            <el-input placeholder="请输入用户名" v-model="form.account"></el-input>
+          </el-form-item>
+          <el-form-item prop="password">
+            <el-input type="password" placeholder="请输入密码" v-model="form.password"></el-input>
+          </el-form-item>
+          <el-form-item prop="repassword">
+            <el-input type="password" placeholder="请再次确认密码" v-model="form.repassword"></el-input>
+          </el-form-item>
+          <el-form-item class="actions">
+            <el-button type="primary" class="primary-btn" @click="registerFn">注册</el-button>
+            <div class="switch-line">
+              已有账号？
+              <el-link type="primary" @click="router.push('/login')">去登录</el-link>
+            </div>
+          </el-form-item>
+        </el-form>
+      </div>
     </div>
   </div>
 </template>
 
 <style lang="less" scoped>
-body {
-  margin: 0;
-  padding: 0;
-  height: 100vh;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  overflow: hidden;
-}
-
-.background {
-  width: 100%;
-  height: 100vh;
-  background-size: cover;
-  background-image: url('../../assets/image/reg.jpg');
-  overflow: hidden; // 防止页面滚动条闪动
-}
-
-.background::before {
-  content: "";
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background-color: rgba(0, 0, 0, 0.6);
-  /* 黑色半透明 */
-  z-index: 1;
-  /* 确保伪元素在背景图之上 */
-}
-
-.rain {
-  position: relative;
-  display: flex;
-}
-
-.rain span {
-  position: relative;
-  width: 20px;
-  height: 20px;
-  background-color: #eee;
-  margin: 0 4px;
-  border-radius: 50%;
-  box-shadow: 0 0 10px 5px rgba(238, 238, 238, 0.5),
-    /* 微调颜色和透明度 */
-    0 0 30px 15px rgba(238, 238, 238, 0.3),
-    /* 模糊半径和扩散范围 */
-    0 0 50px 30px rgba(221, 221, 221, 0.2);
-  animation: animate 15s linear infinite;
-  animation-duration: calc(200s / var(--i));
-}
-
-.rain span:nth-child(even) {
-  background: #ff8800;
-  /* 橙色调 */
-  box-shadow: 0 0 10px 5px rgba(255, 150, 50, 0.5),
-    /* 颜色和透明度 */
-    0 0 30px 15px rgba(200, 100, 50, 0.3),
-    0 0 50px 30px rgba(200, 50, 50, 0.1);
-}
-
-
-@keyframes animate {
-  0% {
-    transform: translateY(100vh) scale(0);
-  }
-
-  100% {
-    transform: translateY(-10vh) scale(1);
-  }
-}
-
-.reg-box {
-  z-index: 10;
-  width: 400px;
-  height: 340px;
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  transform: translate(-50%, -50%);
-  padding: 0 30px;
+.auth-page {
+  min-height: 100vh;
+  padding: 32px;
   box-sizing: border-box;
-  background-color: rgba(0, 0, 0, 0.2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: #e9f5ff;
+}
+
+.auth-shell {
+  width: min(980px, 100%);
+  display: grid;
+  grid-template-columns: minmax(280px, 1fr) minmax(360px, 420px);
+  gap: 32px;
+  align-items: stretch;
+}
+
+.auth-copy {
+  padding: 56px 48px;
+  border-radius: 16px;
+  background-color: #00aaff;
+  color: #ffffff;
+  box-shadow: 0 18px 40px rgba(0, 170, 255, 0.18);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.eyebrow {
+  margin: 0 0 18px;
+  font-size: 12px;
+  letter-spacing: 0.28em;
+  color: rgba(255, 255, 255, 0.78);
+}
+
+.brand-badge {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  margin-bottom: 22px;
+  padding: 8px 14px;
+  border-radius: 999px;
+  background-color: rgba(255, 255, 255, 0.18);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.headline {
+  margin: 0;
+  font-size: 42px;
+  line-height: 1.15;
+  font-weight: 700;
+}
+
+.subhead {
+  margin: 20px 0 0;
+  max-width: 420px;
+  font-size: 16px;
+  line-height: 1.8;
+  color: rgba(255, 255, 255, 0.88);
+}
+
+.tag-list {
+  margin-top: 28px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.tag-list span {
+  padding: 10px 14px;
+  border-radius: 999px;
+  background-color: rgba(255, 255, 255, 0.18);
+  color: #ffffff;
+  font-size: 13px;
+}
+
+.auth-card {
+  padding: 34px 30px 28px;
+  border-radius: 16px;
+  background-color: #ffffff;
+  border-top: 6px solid #00aaff;
+  box-shadow: 0 18px 40px rgba(26, 74, 115, 0.12);
+}
+
+.card-head {
+  margin-bottom: 18px;
+}
+
+.card-kicker {
+  font-size: 12px;
+  color: #6d8aa5;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.card-title {
+  margin-top: 10px;
+  font-size: 32px;
+  font-weight: 700;
+  color: #333333;
+}
+
+.card-desc {
+  margin-top: 8px;
+  font-size: 14px;
+  color: #666666;
+}
+
+.actions {
+  margin-bottom: 0;
+}
+
+.primary-btn {
+  width: 100%;
+  height: 44px;
+  border: none;
   border-radius: 10px;
-  box-shadow: #dddddd 0 0 100px;
+  background-color: #00aaff;
+}
 
-  .title-box {
-    height: 60px;
-    line-height: 60px;
-    font-size: 24px;
-    font-weight: bold;
-    text-align: center;
-    color: #00aaff;
-    margin-bottom: 20px;
+.switch-line {
+  margin-top: 18px;
+  text-align: center;
+  color: #666666;
+  font-size: 14px;
+}
+
+:deep(.el-form-item) {
+  margin-bottom: 20px;
+}
+
+:deep(.el-input__wrapper) {
+  min-height: 46px;
+  border-radius: 10px;
+  background-color: #f4fbff;
+  box-shadow: 0 0 0 1px #d8ecf7 inset;
+}
+
+:deep(.el-input__inner) {
+  color: #333333;
+}
+
+:deep(.el-input__wrapper.is-focus) {
+  box-shadow: 0 0 0 1px #00aaff inset;
+}
+
+@media (max-width: 900px) {
+  .auth-shell {
+    grid-template-columns: 1fr;
   }
 
-  .btn-reg {
-    width: 100%; // 可以让其占满一行，不用考虑怎么变成块级然后独占一行之类的...
+  .auth-copy {
+    padding: 36px 28px;
   }
 
-  .router {
-    text-align: left;
+  .headline {
+    font-size: 34px;
+  }
+}
+
+@media (max-width: 520px) {
+  .auth-page {
+    padding: 18px;
   }
 
-  .el-link {
-    margin-top: 20px;
+  .auth-copy,
+  .auth-card {
+    padding-left: 22px;
+    padding-right: 22px;
+  }
+
+  .headline {
+    font-size: 28px;
   }
 }
 </style>
