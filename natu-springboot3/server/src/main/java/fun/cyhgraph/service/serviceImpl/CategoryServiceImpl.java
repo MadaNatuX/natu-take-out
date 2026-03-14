@@ -22,17 +22,19 @@ public class CategoryServiceImpl implements CategoryService {
 
     /**
      * 新增分类
+     * 
      * @param categoryDTO
      */
     public void addCategory(CategoryDTO categoryDTO) {
         Category category = new Category();
         BeanUtils.copyProperties(categoryDTO, category);
-        category.setStatus(1);  // 默认启用
+        category.setStatus(1); // 默认启用
         categoryMapper.add(category);
     }
 
     /**
      * 根据type条件分页查询
+     * 
      * @param categoryTypePageDTO
      * @return
      */
@@ -44,6 +46,7 @@ public class CategoryServiceImpl implements CategoryService {
 
     /**
      * 获取所有分类列表
+     * 
      * @return
      */
     public List<Category> getList(Integer type) {
@@ -53,6 +56,7 @@ public class CategoryServiceImpl implements CategoryService {
 
     /**
      * 根据id查询分类
+     * 
      * @param id
      * @return
      */
@@ -62,6 +66,7 @@ public class CategoryServiceImpl implements CategoryService {
 
     /**
      * 更新分类信息
+     * 
      * @param categoryDTO
      */
     public void udpate(CategoryDTO categoryDTO) {
@@ -72,6 +77,7 @@ public class CategoryServiceImpl implements CategoryService {
 
     /**
      * 根据id删除分类
+     * 
      * @param id
      */
     public void delete(Integer id) {

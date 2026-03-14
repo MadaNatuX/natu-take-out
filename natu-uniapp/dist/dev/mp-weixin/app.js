@@ -33,7 +33,7 @@ const _sfc_main = /* @__PURE__ */ common_vendor.defineComponent({
     };
   }
 });
-const App = /* @__PURE__ */ common_vendor._export_sfc(_sfc_main, [["__file", "D:/MyCode/public_project/hanye-take-out/hanye-take-out-uniapp/src/App.vue"]]);
+const App = /* @__PURE__ */ common_vendor._export_sfc(_sfc_main, [["__file", "D:/code for learning/biue/natu_deliveray/natu-uniapp/src/App.vue"]]);
 const pinia = common_vendor.createPinia();
 pinia.use(common_vendor.src_default);
 function createApp() {
