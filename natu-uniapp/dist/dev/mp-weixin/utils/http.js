@@ -42,6 +42,7 @@ const http = (options) => {
             title: res.data.msg || "请求失败",
             icon: "none"
           });
+          reject(res);
         }
       },
       // 响应失败

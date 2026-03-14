@@ -181,9 +181,14 @@ const _sfc_main = /* @__PURE__ */ common_vendor.defineComponent({
       common_vendor.index.switchTab({ url: "/pages/index/index" });
     };
     common_vendor.onLoad(async () => {
-      const res = await api_shop.getStatusAPI();
-      console.log("店铺状态---------", res);
-      status.value = res.data === 1 ? true : false;
+      try {
+        const res = await api_shop.getStatusAPI();
+        console.log("店铺状态---------", res);
+        status.value = res.data === 1;
+      } catch (error) {
+        console.error("获取店铺状态失败：", error);
+        status.value = false;
+      }
       await getCategoryData();
       await getDishOrSetmealList(0);
       await getCartList();

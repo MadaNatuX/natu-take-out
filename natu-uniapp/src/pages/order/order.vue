@@ -393,9 +393,14 @@ const goBack = () => {
 
 // 页面加载
 onLoad(async () => {
-  const res = await getStatusAPI()
-  console.log('店铺状态---------', res)
-  status.value = res.data === 1 ? true : false
+  try {
+    const res = await getStatusAPI()
+    console.log('店铺状态---------', res)
+    status.value = res.data === 1
+  } catch (error) {
+    console.error('获取店铺状态失败：', error)
+    status.value = false
+  }
   await getCategoryData()
   await getDishOrSetmealList(0) // 默认加载第一个分类下的菜品列表
   await getCartList() // 获取购物车列表(一开始为空)

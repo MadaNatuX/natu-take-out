@@ -66,6 +66,7 @@ export const http = <T>(options: UniApp.RequestOptions) => {
             title: (res.data as Data<T>).msg || '请求失败',
             icon: 'none',
           })
+          reject(res)
         }
       },
       // 响应失败

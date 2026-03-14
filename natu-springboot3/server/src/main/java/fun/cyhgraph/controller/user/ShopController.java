@@ -20,8 +20,13 @@ public class ShopController {
 
     @GetMapping("/status")
     public Result<Integer> getStatus(){
-        Integer status =  (Integer)redisTemplate.opsForValue().get(KEY);
-        log.info("当前店铺状态为：{}", status == 1 ? "营业中" : "打烊中");
+        Integer status = (Integer) redisTemplate.opsForValue().get(KEY);
+        if (status == null) {
+            status = 0;
+            redisTemplate.opsForValue().set(KEY, status);
+            log.warn("Redis 中未找到店铺状态，已按默认值 {} 初始化", status);
+        }
+        log.info("当前店铺状态为：{}", Integer.valueOf(1).equals(status) ? "营业中" : "打烊中");
         return Result.success(status);
     }
 }
