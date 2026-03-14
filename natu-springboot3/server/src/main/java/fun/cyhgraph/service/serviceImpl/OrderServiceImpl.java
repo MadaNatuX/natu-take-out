@@ -42,6 +42,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.CollectionUtils;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
@@ -93,7 +94,7 @@ public class OrderServiceImpl implements OrderService {
         List<Cart> cartList = getCartList(userId);
         Integer orderType = normalizeOrderType(orderSubmitDTO.getOrderType());
         
-        Order order = buildOrder(orderSubmitDTO, userId, orderType);
+        Order order = buildOrder(orderSubmitDTO, userId, orderType, cartList);
         orderMapper.insert(order);
 
         List<OrderDetail> orderDetailList = buildOrderDetails(cartList, order.getId());
@@ -371,7 +372,7 @@ public class OrderServiceImpl implements OrderService {
      * 这里把“同一个 submit 接口里如何区分外卖/堂食”集中封装，
      * 这样主流程里只保留骨架，具体填充规则都落在这里。
      */
-    private Order buildOrder(OrderSubmitDTO orderSubmitDTO, Integer userId, Integer orderType) {
+    private Order buildOrder(OrderSubmitDTO orderSubmitDTO, Integer userId, Integer orderType, List<Cart> cartList) {
         Order order = new Order();
         BeanUtils.copyProperties(orderSubmitDTO, order);
         order.setOrderType(orderType);
@@ -391,13 +392,16 @@ public class OrderServiceImpl implements OrderService {
             fillTakeoutOrderInfo(order, orderSubmitDTO.getAddressId());
             order.setInNumber(null);
         } else if (Order.ORDER_TYPE_DINE_IN.equals(orderType)) {
-            // 堂食单不需要配送信息，因此这里显式清空相关字段，避免脏数据串入。
+            // 堂食单不需要配送信息，也不应该写入配送/打包相关费用，因此这里统一清空。
             order.setAddressBookId(null);
             order.setPhone(null);
             order.setAddress(null);
             order.setConsignee(null);
             order.setEstimatedDeliveryTime(null);
             order.setDeliveryStatus(null);
+            order.setPackAmount(0);
+            // 当前表里没有单独的配送费字段，因此堂食总金额直接按购物车商品金额重新汇总。
+            order.setAmount(calculateCartAmount(cartList));
             order.setInNumber(generateDineInOrderNumber());
         } else {
             throw new OrderBusinessException(MessageConstant.ORDER_TYPE_ERROR);
@@ -449,6 +453,17 @@ public class OrderServiceImpl implements OrderService {
             orderDetailList.add(orderDetail);
         }
         return orderDetailList;
+    }
+
+    /*
+     * 堂食金额重算：
+     * 购物车里的 amount 是单价，所以这里要乘以数量后再汇总，
+     * 这样即使前端暂时还把配送费/打包费带进总价，后端也不会原样写入。
+     */
+    private BigDecimal calculateCartAmount(List<Cart> cartList) {
+        return cartList.stream()
+                .map(cart -> cart.getAmount().multiply(BigDecimal.valueOf(cart.getNumber())))
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
     }
 
     /*
