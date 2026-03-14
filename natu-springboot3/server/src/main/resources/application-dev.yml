@@ -1,14 +1,14 @@
 hanye:
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
-    url: jdbc:mysql://localhost:3306/hanye_take_out
+    url: jdbc:mysql://192.168.114.199:3306/hanye_take_out
     username: root
     password: 20040111
   redis:
     host: localhost
     port: 6379
-    password: 123456
-    database: 1
+    password: xiaoxia233
+    database: 8
   wechat:
     # 下面这两句改成自己的，不然小程序登不上！
     appid: wxbd5d45c4c0860e6d
