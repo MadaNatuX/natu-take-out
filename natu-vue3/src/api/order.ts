@@ -1,7 +1,18 @@
 import request from '@/utils/request'
 
+export type OrderQueryParams = Partial<{
+  page: number
+  pageSize: number
+  number: string
+  phone: string
+  beginTime: string
+  endTime: string
+  status: number
+  orderType: number
+}>
+
 // 查询列表页接口
-export const getOrderDetailPageAPI = (params: any) => {
+export const getOrderDetailPageAPI = (params: OrderQueryParams) => {
   return request({
     url: '/order/conditionSearch',
     method: 'get',
@@ -62,9 +73,10 @@ export const orderRejectAPI = (params: any) => {
 }
 
 // 获取待处理，待派送，派送中数量
-export const getOrderListByAPI = () => {
+export const getOrderListByAPI = (params?: Pick<OrderQueryParams, 'orderType'>) => {
   return request({
     url: '/order/statistics',
-    method: 'get'
+    method: 'get',
+    params
   })
 }
