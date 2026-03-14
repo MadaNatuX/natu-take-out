@@ -21,7 +21,7 @@ const _sfc_main = /* @__PURE__ */ common_vendor.defineComponent({
     const phoneNumber = common_vendor.ref("");
     const estimatedDeliveryTime = common_vendor.ref("");
     const openCooker = common_vendor.ref(false);
-    const cookerNum = common_vendor.ref(-2);
+    const cookerNum = common_vendor.ref(-1);
     const cookers = common_vendor.ref([-1, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]);
     const radioStatus = common_vendor.ref(false);
     const remark = common_vendor.ref("");
@@ -129,11 +129,14 @@ const _sfc_main = /* @__PURE__ */ common_vendor.defineComponent({
       });
     };
     const chooseCooker = () => {
+      if (cookerNum.value === -2) {
+        cookerNum.value = -1;
+      }
       openCooker.value = true;
     };
     const getCookerInfo = () => {
       if (cookerNum.value === -2)
-        return "请依据实际情况填写，避免浪费";
+        return "无需餐具";
       if (cookerNum.value === -1)
         return "无需餐具";
       if (cookerNum.value === 0)
@@ -154,6 +157,12 @@ const _sfc_main = /* @__PURE__ */ common_vendor.defineComponent({
       }
     };
     const closeMask = () => {
+      openCooker.value = false;
+    };
+    const confirmCooker = () => {
+      if (cookerNum.value === -2) {
+        cookerNum.value = -1;
+      }
       openCooker.value = false;
     };
     const payOrderHandle = async () => {
@@ -266,7 +275,7 @@ const _sfc_main = /* @__PURE__ */ common_vendor.defineComponent({
         B: radioStatus.value,
         C: common_vendor.o(radioChange),
         D: common_vendor.t(cookerNum.value === -2 || cookerNum.value === -1 ? "以后都无需餐具" : "以后都需要餐具，商家依据餐量提供"),
-        E: common_vendor.o(($event) => openCooker.value = !openCooker.value),
+        E: common_vendor.o(confirmCooker),
         F: common_vendor.o(($event) => openCooker.value = openCooker.value),
         G: openCooker.value,
         H: common_vendor.o(($event) => openCooker.value = !openCooker.value)

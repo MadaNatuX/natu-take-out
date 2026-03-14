@@ -119,7 +119,7 @@
               <radio class="radio" color="#00aaff" value="cb" :checked="radioStatus" @click="radioChange" />
               {{ cookerNum === -2 || cookerNum === -1 ? '以后都无需餐具' : '以后都需要餐具，商家依据餐量提供' }}
             </label>
-            <button class="comfirm_btn" @click="openCooker = !openCooker">确定</button>
+            <button class="comfirm_btn" @click="confirmCooker">确定</button>
           </view>
         </view>
       </view>
@@ -152,7 +152,7 @@ const phoneNumber = ref('')
 const estimatedDeliveryTime = ref('')
 
 const openCooker = ref(false)
-const cookerNum = ref(-2)
+const cookerNum = ref(-1)
 const cookers = ref([-1, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11])
 const radioStatus = ref(false)
 const remark = ref('')
@@ -289,11 +289,14 @@ const goRemark = () => {
 }
 
 const chooseCooker = () => {
+  if (cookerNum.value === -2) {
+    cookerNum.value = -1
+  }
   openCooker.value = true
 }
 
 const getCookerInfo = () => {
-  if (cookerNum.value === -2) return '请依据实际情况填写，避免浪费'
+  if (cookerNum.value === -2) return '无需餐具'
   if (cookerNum.value === -1) return '无需餐具'
   if (cookerNum.value === 0) return '商家依据餐量提供'
   if (cookerNum.value === 11) return '10份以上'
@@ -314,6 +317,13 @@ const radioChange = () => {
 }
 
 const closeMask = () => {
+  openCooker.value = false
+}
+
+const confirmCooker = () => {
+  if (cookerNum.value === -2) {
+    cookerNum.value = -1
+  }
   openCooker.value = false
 }
 
