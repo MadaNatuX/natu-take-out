@@ -18,11 +18,22 @@
       <view class="info1">
         <view class="status">{{ status === true ? '营业中' : '打烊中' }}</view>
         <uni-icons custom-prefix="iconfont" type="icon-qian" size="15"></uni-icons>
-        <text class="price">配送费6元</text>
+        <text class="price">{{ serviceText }}</text>
       </view>
       <view class="info2">
         <text class="address">餐厅地址：广州市番禺区亚运城广场</text>
         <uni-icons @click="phone" custom-prefix="iconfont" type="icon-dianhua" size="20"></uni-icons>
+      </view>
+      <view class="mode-switch">
+        <view
+          v-for="item in orderTypeOptions"
+          :key="item.value"
+          class="mode-item"
+          :class="{active: currentOrderType === item.value}"
+          @tap="switchOrderType(item.value)"
+        >
+          {{ item.label }}
+        </view>
       </view>
     </view>
     <view class="blank"></view>
@@ -31,11 +42,20 @@
 
 <script setup lang="ts">
 import {getStatusAPI} from '@/api/shop'
+import {useOrderModeStore} from '@/stores/modules/orderMode'
+import {DINE_IN_ORDER_TYPE, TAKEOUT_ORDER_TYPE} from '@/utils/order'
 import {onLoad} from '@dcloudio/uni-app'
-import {ref} from 'vue'
+import {computed, ref} from 'vue'
 
 // 店铺营业状态
 const status = ref(true)
+const orderModeStore = useOrderModeStore()
+const orderTypeOptions = [
+  {label: '外卖', value: TAKEOUT_ORDER_TYPE},
+  {label: '堂食', value: DINE_IN_ORDER_TYPE},
+]
+const currentOrderType = computed(() => orderModeStore.orderType)
+const serviceText = computed(() => (currentOrderType.value === DINE_IN_ORDER_TYPE ? '堂食用餐' : '配送费6元'))
 
 // 获取屏幕边界到安全区域距离
 const {safeAreaInsets} = uni.getSystemInfoSync()
@@ -52,6 +72,10 @@ const back = () => {
 
 const phone = () => {
   uni.makePhoneCall({phoneNumber: '1999'})
+}
+
+const switchOrderType = (value: number) => {
+  orderModeStore.setOrderType(value)
 }
 </script>
 
@@ -111,7 +135,7 @@ const phone = () => {
   left: 20rpx;
   width: 90%;
   // padding: 0 10rpx 0 10rpx;
-  height: 120rpx;
+  min-height: 180rpx;
   margin: 16rpx 20rpx;
   color: #333;
   font-size: 28rpx;
@@ -142,6 +166,27 @@ const phone = () => {
     uni-icons {
       position: absolute;
       right: 30rpx;
+    }
+  }
+  .mode-switch {
+    display: flex;
+    margin: 16rpx 20rpx 18rpx;
+    padding: 8rpx;
+    border-radius: 999rpx;
+    background: #f2f8fc;
+    .mode-item {
+      flex: 1;
+      height: 60rpx;
+      line-height: 60rpx;
+      text-align: center;
+      color: #5f6b7a;
+      font-size: 26rpx;
+      border-radius: 999rpx;
+    }
+    .active {
+      background: #00aaff;
+      color: #fff;
+      box-shadow: 0 6rpx 14rpx rgba(0, 170, 255, 0.22);
     }
   }
 }

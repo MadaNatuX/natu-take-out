@@ -1,9 +1,11 @@
 "use strict";
 const common_vendor = require("../../common/vendor.js");
 const stores_modules_user = require("../../stores/modules/user.js");
+const stores_modules_orderMode = require("../../stores/modules/orderMode.js");
 const api_user = require("../../api/user.js");
 const api_order = require("../../api/order.js");
 const api_cart = require("../../api/cart.js");
+const utils_order = require("../../utils/order.js");
 require("../../utils/http.js");
 if (!Math) {
   pushMsg();
@@ -13,37 +15,8 @@ const _sfc_main = /* @__PURE__ */ common_vendor.defineComponent({
   __name: "my",
   setup(__props) {
     const userStore = stores_modules_user.useUserStore();
+    const orderModeStore = stores_modules_orderMode.useOrderModeStore();
     const childComp = common_vendor.ref(null);
-    const statusList = [
-      {
-        status: 0,
-        name: "全部订单"
-      },
-      {
-        status: 1,
-        name: "待付款"
-      },
-      {
-        status: 2,
-        name: "待接单"
-      },
-      {
-        status: 3,
-        name: "已接单"
-      },
-      {
-        status: 4,
-        name: "派送中"
-      },
-      {
-        status: 5,
-        name: "已完成"
-      },
-      {
-        status: 6,
-        name: "已取消"
-      }
-    ];
     const user = common_vendor.reactive({
       id: userStore.profile.id,
       name: "",
@@ -54,7 +27,8 @@ const _sfc_main = /* @__PURE__ */ common_vendor.defineComponent({
     const historyOrders = common_vendor.ref([]);
     const orderDTO = common_vendor.ref({
       page: 1,
-      pageSize: 6
+      pageSize: 6,
+      orderType: orderModeStore.orderType
     });
     const total = common_vendor.ref(0);
     common_vendor.onLoad(async (options) => {
@@ -72,21 +46,21 @@ const _sfc_main = /* @__PURE__ */ common_vendor.defineComponent({
       user.pic = res.data.pic;
     };
     const getOrderPage = async () => {
-      console.log("orderDTO", orderDTO.value);
+      orderDTO.value.orderType = orderModeStore.orderType;
       const res = await api_order.getOrderPageAPI(orderDTO.value);
       historyOrders.value = historyOrders.value.concat(res.data.records);
       total.value = res.data.total;
     };
     const reOrder = async (id) => {
-      console.log("再来一单", id);
+      const currentOrder = historyOrders.value.find((item) => item.id === id);
       await api_cart.cleanCartAPI();
       await api_order.reOrderAPI(id);
+      orderModeStore.setOrderType(currentOrder == null ? void 0 : currentOrder.orderType);
       common_vendor.index.redirectTo({
         url: "/pages/order/order"
       });
     };
     const pushOrder = async (id) => {
-      console.log("催单", id);
       await api_order.urgeOrderAPI(id);
       childComp.value.openPopup();
     };
@@ -109,6 +83,8 @@ const _sfc_main = /* @__PURE__ */ common_vendor.defineComponent({
         url: "/pages/orderDetail/orderDetail?orderId=" + id
       });
     };
+    const getStatusText = (item) => utils_order.getOrderStatusText(item.status, item.orderType);
+    const getDishAmount = (item) => utils_order.getOrderItemCount(item.orderDetailList);
     const goAddress = () => {
       common_vendor.index.redirectTo({
         url: "/pages/address/address"
@@ -144,12 +120,12 @@ const _sfc_main = /* @__PURE__ */ common_vendor.defineComponent({
               };
             }),
             c: common_vendor.t(item.orderTime),
-            d: common_vendor.t(statusList[item.status].name),
+            d: common_vendor.t(getStatusText(item)),
             e: common_vendor.t(item.amount),
-            f: common_vendor.t(item.packAmount),
+            f: common_vendor.t(getDishAmount(item)),
             g: common_vendor.o(($event) => reOrder(item.id), index),
-            h: item.status === 2
-          }, item.status === 2 ? {
+            h: item.status === 2 && !common_vendor.unref(utils_order.isDineInOrder)(item.orderType)
+          }, item.status === 2 && !common_vendor.unref(utils_order.isDineInOrder)(item.orderType) ? {
             i: common_vendor.o(($event) => pushOrder(item.id), index)
           } : {}, {
             j: index,

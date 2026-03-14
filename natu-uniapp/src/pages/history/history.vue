@@ -29,14 +29,14 @@
           <view class="history_item_order_time">{{ item.orderTime }}</view>
         </view>
         <view class="history_item_right">
-          <view class="history_item_status">{{ statusList[item.status as number].name }}</view>
+          <view class="history_item_status">{{ getStatusText(item) }}</view>
           <view class="history_item_price">￥{{ item.amount }}</view>
-          <view class="history_item_dish_amount">共{{ item.packAmount }}份</view>
+          <view class="history_item_dish_amount">共{{ getDishAmount(item) }}份</view>
         </view>
       </view>
       <view class="btn_box">
         <view class="history_item_reOrder" @click.stop="reOrder(item.id as number)">再来一单</view>
-        <view class="history_item_push_order" v-if="item.status === 2" @click.stop="pushOrder(item.id as number)">
+        <view class="history_item_push_order" v-if="item.status === 2 && !isDineInOrder(item.orderType)" @click.stop="pushOrder(item.id as number)">
           催单
         </view>
       </view>
@@ -50,11 +50,14 @@
 import pushMsg from '../../components/message/pushMsg.vue'
 import {ref} from 'vue'
 import {onLoad, onReachBottom} from '@dcloudio/uni-app'
-import {getOrderPageAPI, reOrderAPI} from '@/api/order'
+import {getOrderPageAPI, reOrderAPI, urgeOrderAPI} from '@/api/order'
 import {cleanCartAPI} from '@/api/cart'
+import {useOrderModeStore} from '@/stores/modules/orderMode'
 import type {OrderPageDTO, OrderVO} from '@/types/order'
+import {getOrderItemCount, getOrderStatusText, isDineInOrder} from '@/utils/order'
 
 const childComp: any = ref(null)
+const orderModeStore = useOrderModeStore()
 
 // 顶部tab栏
 const statusOptions = [
@@ -75,44 +78,12 @@ const statusOptions = [
     name: '已取消',
   },
 ]
-// 所有状态
-const statusList = [
-  {
-    status: 0,
-    name: '全部订单',
-  },
-  {
-    status: 1,
-    name: '待付款',
-  },
-  {
-    status: 2,
-    name: '待接单',
-  },
-  {
-    status: 3,
-    name: '已接单',
-  },
-  {
-    status: 4,
-    name: '派送中',
-  },
-  {
-    status: 5,
-    name: '已完成',
-  },
-  {
-    status: 6,
-    name: '已取消',
-  },
-]
-
 const activeIndex = ref(0)
 const historyOrders = ref<OrderVO[]>([])
 const orderDTO = ref<OrderPageDTO>({
   page: 1,
   pageSize: 6,
-  // status: 0,
+  orderType: orderModeStore.orderType
 })
 const total = ref(0)
 
@@ -141,18 +112,18 @@ onReachBottom(() => {
 
 const getOrderPage = async (index: number, type?: string) => {
   activeIndex.value = index
-  console.log('根据status获取订单信息')
-  // != 0 说明不是全部订单，需要传入status条件分页查询
+  if (type === '更改状态') {
+    orderDTO.value.page = 1
+  }
   if (index !== 0) {
     orderDTO.value.status = statusOptions[index].status
   } else {
     delete orderDTO.value.status
   }
-  console.log('orderDTO', orderDTO.value)
+  orderDTO.value.orderType = orderModeStore.orderType
   const res = await getOrderPageAPI(orderDTO.value)
   if (type === '更改状态') {
     historyOrders.value = res.data.records
-    orderDTO.value.page = 1
   } else {
     historyOrders.value = historyOrders.value.concat(res.data.records)
   }
@@ -167,25 +138,24 @@ const toOrderDetail = (id: number) => {
 
 // 再来一单
 const reOrder = async (id: number) => {
-  console.log('再来一单', id)
-  // 菜品批量加入购物车之前，要先清空购物车，避免批量加入购物车后数据并不完全一样
+  const currentOrder = historyOrders.value.find((item) => item.id === id)
   await cleanCartAPI()
-  // 再来一单会将当前订单的菜品批量加入购物车，跳转到订单页面后，购物车将高亮显示
   await reOrderAPI(id as number)
+  orderModeStore.setOrderType(currentOrder?.orderType)
   uni.redirectTo({
-    url: '/pages/order/order',
+    url: '/pages/order/order'
   })
 }
 
 // 催单
-const pushOrder = (id: number) => {
-  console.log('催单', id)
+const pushOrder = async (id: number) => {
+  await urgeOrderAPI(id)
   childComp.value.openPopup()
-  // uni.showToast({
-  //   title: '已催单',
-  //   icon: 'none',
-  // })
 }
+
+const getStatusText = (item: OrderVO) => getOrderStatusText(item.status, item.orderType)
+
+const getDishAmount = (item: OrderVO) => getOrderItemCount(item.orderDetailList)
 </script>
 
 <style lang="less" scoped>

@@ -6,6 +6,8 @@ export type OrderSubmitVO = Partial<{
   orderTime: Date // 下单时间
 }>
 
+export type OrderType = 1 | 2
+
 // 订单信息
 export type Order = Partial<{
   id: number // 订单id
@@ -27,6 +29,8 @@ export type Order = Partial<{
   rejectionReason: string // 订单拒绝原因
   cancelTime: Date // 订单取消时间
   estimatedDeliveryTime: Date // 预计送达时间
+  orderType: OrderType // 订单类型 1外卖 2堂食
+  inNumber: number | null // 堂食订单号
   deliveryStatus: number // 配送状态  1立即送出  0选择具体时间
   deliveryTime: Date // 送达时间
   packAmount: number // 打包费
@@ -54,6 +58,7 @@ export type OrderPageDTO = {
   // number: string // 订单号
   // phone: string // 手机号
   status?: number // 订单状态 1待付款 2待接单 3已接单 4派送中 5已完成 6已取消
+  orderType?: OrderType
   // beginTime: Date // 开始时间
   // endTime: Date // 结束时间
   // userId: number // 用户id

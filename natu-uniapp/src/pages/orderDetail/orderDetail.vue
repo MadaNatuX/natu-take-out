@@ -1,6 +1,6 @@
 <template>
   <view class="white_box">
-    <view class="orderDetail">{{ statusList[order.status as number].name }}</view>
+    <view class="orderDetail">{{ statusText }}</view>
     <view class="time_box" v-if="order.status === 1">
       <view class="time" v-if="countdownStore.showM <= 0 && countdownStore.showS <= 0">订单已超时</view>
       <view class="time" v-else>
@@ -17,13 +17,8 @@
     <view class="btn_box">
       <!-- 1待付款 2待接单 3已接单 4派送中 5已完成 6已取消 -->
       <view class="reOrder" v-if="(order.status as number) <= 2" @click="cancelOrder">取消订单</view>
-      <view
-        class="toPay"
-        v-if="order.status === 1 && (countdownStore.showM > 0 || countdownStore.showS > 0)"
-        @click="toPay"
-        >立即支付
-      </view>
-      <view class="pushOrder" v-if="order.status === 2" @click="pushOrder">催单</view>
+      <view class="toPay" v-if="order.status === 1 && (countdownStore.showM > 0 || countdownStore.showS > 0)" @click="toPay">立即支付</view>
+      <view class="pushOrder" v-if="showPushOrder" @click="pushOrder">催单</view>
       <view class="reOrder" v-if="order.status === 2 || order.status === 6" @click="reOrder">再来一单</view>
     </view>
   </view>
@@ -46,11 +41,11 @@
           <view class="dish_price"> <text class="ico">￥</text> {{ obj.amount }} </view>
         </view>
       </view>
-      <view class="word_text">
+      <view class="word_text" v-if="isTakeoutMode">
         <view class="word_left">打包费</view>
         <view class="word_right">￥{{ order.packAmount }}</view>
       </view>
-      <view class="word_text">
+      <view class="word_text" v-if="isTakeoutMode">
         <view class="word_left">配送费</view>
         <view class="word_right">￥6</view>
       </view>
@@ -88,19 +83,21 @@
       <view class="text_left">订单号</view>
       <view class="text_right">{{ order.number }}</view>
     </view>
+    <view v-if="isDineInMode" class="bottom_text">
+      <view class="text_left">堂食订单号</view>
+      <view class="text_right">{{ order.inNumber ?? '--' }}</view>
+    </view>
     <view class="bottom_text">
       <view class="text_left">下单时间</view>
       <view class="text_right">{{ order.orderTime }}</view>
     </view>
-    <view class="bottom_text">
+    <view class="bottom_text" v-if="isTakeoutMode">
       <view class="text_left">地址</view>
       <view class="text_right">{{ order.address }}</view>
     </view>
     <view class="bottom_text">
-      <view class="text_left">餐具数量</view>
-      <view class="text_right">
-        {{ order.packAmount === -1 ? '无需餐具' : order.packAmount === 0 ? '按餐量提供' : order.packAmount }}
-      </view>
+      <view class="text_left">订单类型</view>
+      <view class="text_right">{{ orderModeText }}</view>
     </view>
   </view>
 
@@ -110,47 +107,19 @@
 
 <script lang="ts" setup>
 import pushMsg from '../../components/message/pushMsg.vue'
-import {ref, reactive} from 'vue'
+import {computed, reactive, ref} from 'vue'
 import {onLoad} from '@dcloudio/uni-app'
-import {getOrderAPI, cancelOrderAPI, reOrderAPI, urgeOrderAPI, payOrderAPI} from '@/api/order'
+import {getOrderAPI, cancelOrderAPI, reOrderAPI, urgeOrderAPI} from '@/api/order'
 import {cleanCartAPI} from '@/api/cart'
 import {useCountdownStore} from '@/stores/modules/countdown'
-import type {Order, OrderVO} from '@/types/order'
+import {useOrderModeStore} from '@/stores/modules/orderMode'
+import type {OrderVO} from '@/types/order'
+import {getOrderModeLabel, getOrderStatusText, isDineInOrder} from '@/utils/order'
 
 const childComp: any = ref(null)
 
-const statusList = [
-  {
-    status: 0,
-    name: '全部订单',
-  },
-  {
-    status: 1,
-    name: '等待支付',
-  },
-  {
-    status: 2,
-    name: '等待商家接单',
-  },
-  {
-    status: 3,
-    name: '商家已接单',
-  },
-  {
-    status: 4,
-    name: '正在派送中',
-  },
-  {
-    status: 5,
-    name: '订单已完成',
-  },
-  {
-    status: 6,
-    name: '订单已取消',
-  },
-]
-
 const countdownStore = useCountdownStore()
+const orderModeStore = useOrderModeStore()
 
 const order = reactive<OrderVO>({
   id: 0, // 订单id
@@ -161,24 +130,24 @@ const order = reactive<OrderVO>({
   orderTime: new Date(), // 下单时间
   orderDetailList: [], // 订单详情
 })
+const isDineInMode = computed(() => isDineInOrder(order.orderType))
+const isTakeoutMode = computed(() => !isDineInMode.value)
+const statusText = computed(() => getOrderStatusText(order.status, order.orderType))
+const orderModeText = computed(() => getOrderModeLabel(order.orderType))
+const showPushOrder = computed(() => order.status === 2 && isTakeoutMode.value)
 
 onLoad(async (options) => {
-  console.log('options', options)
-  order.id = options!.orderId
+  order.id = Number(options!.orderId)
   await getOrderDetail()
 })
 
 const getOrderDetail = async () => {
-  console.log('获取订单详情')
   const res = await getOrderAPI(order.id as number)
-  console.log('res', res)
   Object.assign(order, res.data)
-  console.log('刷新得到新的order', order)
 }
 
 // 只有待付款，或者商家接单前，才能取消订单
 const cancelOrder = async () => {
-  console.log('取消订单')
   const res = await cancelOrderAPI(order.id as number)
   if (res.code === 0) {
     uni.showToast({
@@ -190,7 +159,7 @@ const cancelOrder = async () => {
       title: '提示',
       content: '商家已接单，欲取消订单请与商家联系！',
       showCancel: false, // 不显示取消按钮
-      success: function (res) {
+      success(res) {
         if (res.confirm) {
           console.log('用户点击确定')
         }
@@ -203,55 +172,32 @@ const cancelOrder = async () => {
 
 // 催单
 const pushOrder = async () => {
-  console.log('催单')
-  const res = await urgeOrderAPI(order.id as number)
-  console.log('催单res信息', res.data)
+  await urgeOrderAPI(order.id as number)
   if (childComp.value) {
     childComp.value.openPopup()
   }
-  // popup.value.open()
-  // uni.showToast({
-  //   title: '已催单',
-  //   icon: 'none',
-  // })
 }
 
 // 再来一单
 const reOrder = async () => {
-  console.log('再来一单')
-  // 菜品批量加入购物车之前，要先清空购物车，避免批量加入购物车后数据并不完全一样
   await cleanCartAPI()
-  // 再来一单会将当前订单的菜品批量加入购物车，跳转到订单页面后，购物车将高亮显示
   await reOrderAPI(order.id as number)
+  orderModeStore.setOrderType(order.orderType)
   uni.redirectTo({
-    url: '/pages/order/order',
+    url: '/pages/order/order'
   })
 }
 
 // 联系商家
 const connectShop = () => {
-  console.log('联系商家')
   uni.makePhoneCall({
-    phoneNumber: '1999',
+    phoneNumber: '1999'
   })
 }
 
-// 支付成功
 const toPay = async () => {
-  console.log('支付成功')
-  // 支付后修改订单状态
-  const payDTO = {
-    orderNumber: order.number as string,
-    payMethod: 1, // 本平台默认微信支付
-  }
-  await payOrderAPI(payDTO)
-  // 关闭定时器
-  if (countdownStore.timer !== undefined) {
-    clearInterval(countdownStore.timer)
-    countdownStore.timer = undefined
-  }
   uni.redirectTo({
-    url:
+      url:
       '/pages/pay/pay?orderId=' +
       order.id +
       '&orderNumber=' +
@@ -259,7 +205,7 @@ const toPay = async () => {
       '&orderAmount=' +
       order.amount +
       '&orderTime=' +
-      order.orderTime,
+      order.orderTime
   })
 }
 </script>

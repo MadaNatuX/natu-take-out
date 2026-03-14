@@ -4,22 +4,22 @@ const api_address = require("../../api/address.js");
 const api_cart = require("../../api/cart.js");
 const api_order = require("../../api/order.js");
 const stores_modules_address = require("../../stores/modules/address.js");
+const stores_modules_orderMode = require("../../stores/modules/orderMode.js");
+const utils_order = require("../../utils/order.js");
 require("../../utils/http.js");
 require("../../stores/modules/user.js");
+const DELIVERY_FEE = 6;
 const _sfc_main = /* @__PURE__ */ common_vendor.defineComponent({
   __name: "submit",
   setup(__props) {
     const store = stores_modules_address.useAddressStore();
+    const orderModeStore = stores_modules_orderMode.useOrderModeStore();
     const cartList = common_vendor.ref([]);
-    const CartAllNumber = common_vendor.ref(0);
-    const CartAllPrice = common_vendor.ref(0);
     const address = common_vendor.ref("");
     const label = common_vendor.ref("");
     const consignee = common_vendor.ref("");
-    const gender = common_vendor.ref(0);
     const phoneNumber = common_vendor.ref("");
     const estimatedDeliveryTime = common_vendor.ref("");
-    common_vendor.ref("ios");
     const openCooker = common_vendor.ref(false);
     const cookerNum = common_vendor.ref(-2);
     const cookers = common_vendor.ref([-1, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]);
@@ -27,30 +27,38 @@ const _sfc_main = /* @__PURE__ */ common_vendor.defineComponent({
     const remark = common_vendor.ref("");
     const arrivalTime = common_vendor.ref("");
     const addressId = common_vendor.ref(0);
+    const currentOrderType = common_vendor.computed(() => orderModeStore.orderType);
+    const isTakeoutMode = common_vendor.computed(() => currentOrderType.value === utils_order.TAKEOUT_ORDER_TYPE);
+    const deliveryFee = DELIVERY_FEE;
+    const cartItemCount = common_vendor.computed(() => cartList.value.reduce((acc, cur) => acc + cur.number, 0));
+    const dishTotalPrice = common_vendor.computed(() => cartList.value.reduce((acc, cur) => acc + cur.amount * cur.number, 0));
+    const packAmount = common_vendor.computed(() => cartItemCount.value);
+    const takeoutTotal = common_vendor.computed(() => dishTotalPrice.value + packAmount.value + DELIVERY_FEE);
+    const dineInTotal = common_vendor.computed(() => dishTotalPrice.value);
+    const displayTotalPrice = common_vendor.computed(() => formatPrice(isTakeoutMode.value ? takeoutTotal.value : dineInTotal.value));
+    const selectedCookerIndex = common_vendor.computed(() => {
+      const currentIndex = cookers.value.findIndex((item) => item === cookerNum.value);
+      return [currentIndex >= 0 ? currentIndex : 0];
+    });
     const getCartList = async () => {
       const res = await api_cart.getCartAPI();
-      console.log("初始化购物车列表", res);
       cartList.value = res.data;
-      CartAllNumber.value = cartList.value.reduce((acc, cur) => acc + cur.number, 0);
-      CartAllPrice.value = cartList.value.reduce((acc, cur) => acc + cur.amount * cur.number, 0) + CartAllNumber.value + 6;
-      console.log("CartAllNumber", CartAllNumber.value);
-      console.log("CartAllPrice", CartAllPrice.value);
     };
     common_vendor.onLoad(async (options) => {
-      await getAddressBookDefault();
-      console.log("options", options);
+      if (isTakeoutMode.value) {
+        await getAddressBookDefault();
+      }
       if (options.address) {
         const addressObj = JSON.parse(options.address);
-        console.log("获取新的地址啊！addressObj", addressObj);
         addressId.value = addressObj.id;
         label.value = addressObj.label;
         address.value = addressObj.provinceName + addressObj.cityName + addressObj.districtName + addressObj.detail;
         phoneNumber.value = addressObj.phone;
         consignee.value = addressObj.consignee;
-      } else if (options.remark) {
+      }
+      if (options.remark) {
         remark.value = options.remark;
       }
-      console.log("我地址id赋值了啊1-------------", addressId.value);
       await getCartList();
       getHarfAnOur();
       if (store.defaultCook === "无需餐具") {
@@ -59,43 +67,38 @@ const _sfc_main = /* @__PURE__ */ common_vendor.defineComponent({
         cookerNum.value = 0;
       }
     });
-    common_vendor.onShow(async (options) => {
-      console.log("options", options);
+    common_vendor.onShow(async () => {
       await getCartList();
     });
+    const formatPrice = (value) => {
+      return (Math.round(value * 100) / 100).toFixed(2);
+    };
     const DateToStr = (date) => {
-      var year = date.getFullYear();
-      var month = date.getMonth();
-      var day = date.getDate();
-      var hours = date.getHours();
-      var min = date.getMinutes();
-      var second = date.getSeconds();
+      const year = date.getFullYear();
+      const month = date.getMonth();
+      const day = date.getDate();
+      const hours = date.getHours();
+      const min = date.getMinutes();
+      const second = date.getSeconds();
       return year + "-" + (month + 1 > 9 ? month + 1 : "0" + (month + 1)) + "-" + (day > 9 ? day : "0" + day) + " " + (hours > 9 ? hours : "0" + hours) + ":" + (min > 9 ? min : "0" + min) + ":" + (second > 9 ? second : "0" + second);
     };
     const getHarfAnOur = () => {
       const date = /* @__PURE__ */ new Date();
       date.setTime(date.getTime() + 36e5);
-      const formattedDate = DateToStr(date);
-      estimatedDeliveryTime.value = formattedDate;
-      let hours = date.getHours();
-      let minutes = date.getMinutes();
-      if (hours < 10)
-        hours = parseInt("0" + hours);
-      if (minutes < 10)
-        minutes = parseInt("0" + minutes);
+      estimatedDeliveryTime.value = DateToStr(date);
+      const hours = date.getHours().toString().padStart(2, "0");
+      const minutes = date.getMinutes().toString().padStart(2, "0");
       arrivalTime.value = hours + ":" + minutes;
     };
     const getAddressBookDefault = async () => {
       const res = await api_address.getDefaultAddressAPI();
       if (res.code === 0) {
-        console.log("默认地址", res.data);
         addressId.value = 0;
         if (res.data.provinceName) {
           address.value = res.data.provinceName + res.data.cityName + res.data.districtName + res.data.detail;
         }
         phoneNumber.value = res.data.phone;
         consignee.value = res.data.consignee;
-        gender.value = res.data.gender;
         addressId.value = res.data.id;
       }
     };
@@ -112,6 +115,9 @@ const _sfc_main = /* @__PURE__ */ common_vendor.defineComponent({
       }
     };
     const goAddress = () => {
+      if (!isTakeoutMode.value) {
+        return;
+      }
       store.addressBackUrl = "/pages/submit/submit";
       common_vendor.index.redirectTo({
         url: "/pages/address/address"
@@ -128,18 +134,16 @@ const _sfc_main = /* @__PURE__ */ common_vendor.defineComponent({
     const getCookerInfo = () => {
       if (cookerNum.value === -2)
         return "请依据实际情况填写，避免浪费";
-      else if (cookerNum.value === -1)
+      if (cookerNum.value === -1)
         return "无需餐具";
-      else if (cookerNum.value === 0)
+      if (cookerNum.value === 0)
         return "商家依据餐量提供";
-      else if (cookerNum.value === 11)
+      if (cookerNum.value === 11)
         return "10份以上";
-      else
-        return cookerNum.value + "份";
+      return cookerNum.value + "份";
     };
     const pickerChange = (ev) => {
-      console.log(ev.detail.value);
-      cookerNum.value = ev.detail.value[0] - 1;
+      cookerNum.value = cookers.value[ev.detail.value[0]];
     };
     const radioChange = () => {
       radioStatus.value = !radioStatus.value;
@@ -154,16 +158,14 @@ const _sfc_main = /* @__PURE__ */ common_vendor.defineComponent({
     };
     const payOrderHandle = async () => {
       const unPayRes = await api_order.getUnPayOrderAPI();
-      console.log("未支付订单", unPayRes);
       if (unPayRes.data !== 0) {
-        console.log("有未支付订单", unPayRes.data);
         common_vendor.index.showToast({
           title: "有未支付订单，请先支付或取消！",
           icon: "none"
         });
         return false;
       }
-      if (!address.value) {
+      if (isTakeoutMode.value && !address.value) {
         common_vendor.index.showToast({
           title: "请选择收货地址",
           icon: "none"
@@ -177,26 +179,24 @@ const _sfc_main = /* @__PURE__ */ common_vendor.defineComponent({
         });
         return false;
       }
-      console.log("我传地址id了啊2--------------", addressId.value);
       const params = {
         payMethod: 1,
-        addressId: addressId.value,
         remark: remark.value,
-        estimatedDeliveryTime: estimatedDeliveryTime.value,
-        // 预计到达时间
-        deliveryStatus: 1,
-        // 立即送出
+        orderType: currentOrderType.value,
         tablewareNumber: cookerNum.value,
-        // 餐具份数
         tablewareStatus: cookerNum.value === 0 ? 1 : 0,
-        // 餐具状态: 1按餐量提供，0选择具体数量
-        packAmount: CartAllNumber.value,
-        amount: CartAllPrice.value
+        amount: isTakeoutMode.value ? takeoutTotal.value : dineInTotal.value
       };
-      console.log("生成订单params", params);
+      if (isTakeoutMode.value) {
+        Object.assign(params, {
+          addressId: addressId.value,
+          estimatedDeliveryTime: estimatedDeliveryTime.value,
+          deliveryStatus: 1,
+          packAmount: packAmount.value
+        });
+      }
       const res = await api_order.submitOrderAPI(params);
       if (res.code === 0) {
-        console.log("订单生成成功", res.data);
         common_vendor.index.redirectTo({
           url: "/pages/pay/pay?orderId=" + res.data.id + "&orderAmount=" + res.data.orderAmount + "&orderNumber=" + res.data.orderNumber + "&orderTime=" + res.data.orderTime
         });
@@ -209,18 +209,19 @@ const _sfc_main = /* @__PURE__ */ common_vendor.defineComponent({
     };
     return (_ctx, _cache) => {
       return common_vendor.e({
-        a: !address.value
-      }, !address.value ? {} : {}, {
-        b: address.value
-      }, address.value ? {
+        a: isTakeoutMode.value
+      }, isTakeoutMode.value ? common_vendor.e({
+        b: !address.value
+      }, !address.value ? {} : {
         c: common_vendor.t(label.value || "其他"),
         d: common_vendor.n("tag" + trans(label.value)),
         e: common_vendor.t(address.value),
         f: common_vendor.t(consignee.value),
         g: common_vendor.t(phoneNumber.value)
-      } : {}, {
+      }, {
         h: common_vendor.o(goAddress),
-        i: common_vendor.t(arrivalTime.value),
+        i: common_vendor.t(arrivalTime.value)
+      }) : {}, {
         j: common_vendor.f(cartList.value, (obj, index, i0) => {
           return common_vendor.e({
             a: obj.pic,
@@ -237,31 +238,38 @@ const _sfc_main = /* @__PURE__ */ common_vendor.defineComponent({
             h: index
           });
         }),
-        k: common_vendor.t(CartAllNumber.value),
-        l: common_vendor.t(CartAllPrice.value),
-        m: common_vendor.t(remark.value || "选择口味等"),
-        n: common_vendor.o(goRemark),
-        o: common_vendor.t(getCookerInfo()),
-        p: common_vendor.o(chooseCooker),
-        q: common_vendor.t(CartAllNumber.value),
-        r: common_vendor.t(parseFloat((Math.round(CartAllPrice.value * 100) / 100).toFixed(2))),
-        s: common_vendor.o(($event) => payOrderHandle()),
-        t: common_vendor.o(closeMask),
-        v: common_vendor.f(cookers.value, (item, k0, i0) => {
+        k: isTakeoutMode.value
+      }, isTakeoutMode.value ? {
+        l: common_vendor.t(packAmount.value)
+      } : {}, {
+        m: isTakeoutMode.value
+      }, isTakeoutMode.value ? {
+        n: common_vendor.t(common_vendor.unref(deliveryFee))
+      } : {}, {
+        o: common_vendor.t(displayTotalPrice.value),
+        p: common_vendor.t(remark.value || "选择口味等"),
+        q: common_vendor.o(goRemark),
+        r: common_vendor.t(getCookerInfo()),
+        s: common_vendor.o(chooseCooker),
+        t: common_vendor.t(cartItemCount.value),
+        v: common_vendor.t(displayTotalPrice.value),
+        w: common_vendor.o(($event) => payOrderHandle()),
+        x: common_vendor.o(closeMask),
+        y: common_vendor.f(cookers.value, (item, k0, i0) => {
           return {
             a: common_vendor.t(item === -1 ? "无需餐具" : item === 0 ? "商家依据餐量提供" : item === 11 ? "10份以上" : item + "份"),
             b: item
           };
         }),
-        w: cookers.value,
-        x: common_vendor.o(pickerChange),
-        y: radioStatus.value,
-        z: common_vendor.o(radioChange),
-        A: common_vendor.t(cookerNum.value === -2 || cookerNum.value === -1 ? "以后都无需餐具" : "以后都需要餐具，商家依据餐量提供"),
-        B: common_vendor.o(($event) => openCooker.value = !openCooker.value),
-        C: common_vendor.o(($event) => openCooker.value = openCooker.value),
-        D: openCooker.value,
-        E: common_vendor.o(($event) => openCooker.value = !openCooker.value)
+        z: selectedCookerIndex.value,
+        A: common_vendor.o(pickerChange),
+        B: radioStatus.value,
+        C: common_vendor.o(radioChange),
+        D: common_vendor.t(cookerNum.value === -2 || cookerNum.value === -1 ? "以后都无需餐具" : "以后都需要餐具，商家依据餐量提供"),
+        E: common_vendor.o(($event) => openCooker.value = !openCooker.value),
+        F: common_vendor.o(($event) => openCooker.value = openCooker.value),
+        G: openCooker.value,
+        H: common_vendor.o(($event) => openCooker.value = !openCooker.value)
       });
     };
   }

@@ -2,6 +2,8 @@
 const common_vendor = require("../../../common/vendor.js");
 const common_assets = require("../../../common/assets.js");
 const api_shop = require("../../../api/shop.js");
+const stores_modules_orderMode = require("../../../stores/modules/orderMode.js");
+const utils_order = require("../../../utils/order.js");
 require("../../../utils/http.js");
 require("../../../stores/modules/user.js");
 if (!Array) {
@@ -16,6 +18,13 @@ const _sfc_main = /* @__PURE__ */ common_vendor.defineComponent({
   __name: "Navbar",
   setup(__props) {
     const status = common_vendor.ref(true);
+    const orderModeStore = stores_modules_orderMode.useOrderModeStore();
+    const orderTypeOptions = [
+      { label: "外卖", value: utils_order.TAKEOUT_ORDER_TYPE },
+      { label: "堂食", value: utils_order.DINE_IN_ORDER_TYPE }
+    ];
+    const currentOrderType = common_vendor.computed(() => orderModeStore.orderType);
+    const serviceText = common_vendor.computed(() => currentOrderType.value === utils_order.DINE_IN_ORDER_TYPE ? "堂食用餐" : "配送费6元");
     const { safeAreaInsets } = common_vendor.index.getSystemInfoSync();
     common_vendor.onLoad(async () => {
       const res = await api_shop.getStatusAPI();
@@ -27,6 +36,9 @@ const _sfc_main = /* @__PURE__ */ common_vendor.defineComponent({
     };
     const phone = () => {
       common_vendor.index.makePhoneCall({ phoneNumber: "1999" });
+    };
+    const switchOrderType = (value) => {
+      orderModeStore.setOrderType(value);
     };
     return (_ctx, _cache) => {
       var _a;
@@ -41,11 +53,20 @@ const _sfc_main = /* @__PURE__ */ common_vendor.defineComponent({
           type: "icon-qian",
           size: "15"
         }),
-        g: common_vendor.o(phone),
-        h: common_vendor.p({
+        g: common_vendor.t(serviceText.value),
+        h: common_vendor.o(phone),
+        i: common_vendor.p({
           ["custom-prefix"]: "iconfont",
           type: "icon-dianhua",
           size: "20"
+        }),
+        j: common_vendor.f(orderTypeOptions, (item, k0, i0) => {
+          return {
+            a: common_vendor.t(item.label),
+            b: item.value,
+            c: currentOrderType.value === item.value ? 1 : "",
+            d: common_vendor.o(($event) => switchOrderType(item.value), item.value)
+          };
         })
       };
     };

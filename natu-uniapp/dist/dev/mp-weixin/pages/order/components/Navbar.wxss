@@ -46,7 +46,7 @@
   top: 120rpx;
   left: 20rpx;
   width: 90%;
-  height: 120rpx;
+  min-height: 180rpx;
   margin: 16rpx 20rpx;
   color: #333;
   font-size: 28rpx;
@@ -79,6 +79,27 @@
 .info .info2 uni-icons.data-v-e1a17746 {
   position: absolute;
   right: 30rpx;
+}
+.info .mode-switch.data-v-e1a17746 {
+  display: flex;
+  margin: 16rpx 20rpx 18rpx;
+  padding: 8rpx;
+  border-radius: 999rpx;
+  background: #f2f8fc;
+}
+.info .mode-switch .mode-item.data-v-e1a17746 {
+  flex: 1;
+  height: 60rpx;
+  line-height: 60rpx;
+  text-align: center;
+  color: #5f6b7a;
+  font-size: 26rpx;
+  border-radius: 999rpx;
+}
+.info .mode-switch .active.data-v-e1a17746 {
+  background: #00aaff;
+  color: #fff;
+  box-shadow: 0 6rpx 14rpx rgba(0, 170, 255, 0.22);
 }
 .icon-scan.data-v-e1a17746 {
   font-size: 30rpx;

@@ -67,7 +67,8 @@ public class Order implements Serializable {
     private Integer inNumber; // 堂食订单号
     private Integer deliveryStatus; // 配送状态  1立即送出  0选择具体时间
     private LocalDateTime deliveryTime; // 送达时间
-    private int packAmount; // 打包费
-    private int tablewareNumber; // 餐具数量
+    // 这两个字段在堂食单里可能不传，因此这里必须用包装类型，避免 BeanUtils 把 null 复制到基本类型时报错。
+    private Integer packAmount; // 打包费
+    private Integer tablewareNumber; // 餐具数量
     private Integer tablewareStatus; // 餐具数量状态  1按餐量提供  0选择具体数量
 }
