@@ -13,5 +13,7 @@ public class MessageConstant {
     public static final String CART_IS_NULL = "购物车为空";
     public static final String ORDER_NOT_FOUND = "订单不存在";
     public static final String ORDER_STATUS_ERROR = "订单状态错误";
+    // 单双模型扩展后的统一异常文案，用于拦截非法 orderType。
+    public static final String ORDER_TYPE_ERROR = "订单类型错误";
     public static final String UNKNOWN_ERROR = "未知错误";
 }

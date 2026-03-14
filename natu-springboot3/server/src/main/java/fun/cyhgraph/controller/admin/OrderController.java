@@ -21,6 +21,12 @@ public class OrderController {
     @Autowired
     private OrderService orderService;
 
+    /*
+     * 管理端控制器：
+     * 这次仍然保持原接口不变，只补充 orderType 查询参数，
+     * 让前端可以在不同页面写死不同的订单类型。
+     */
+
     /**
      * 条件分页查询订单信息
      * @param orderPageDTO
@@ -36,11 +42,12 @@ public class OrderController {
 
     /**
      * 不同状态订单数量统计
+     * @param orderType 订单类型 1外卖 2堂食；不传时默认按外卖统计
      * @return
      */
     @GetMapping("/statistics")
-    public Result<OrderStatisticsVO> statistics(){
-        OrderStatisticsVO orderStatisticsVO = orderService.statistics();
+    public Result<OrderStatisticsVO> statistics(@RequestParam(required = false) Integer orderType){
+        OrderStatisticsVO orderStatisticsVO = orderService.statistics(orderType);
         return Result.success(orderStatisticsVO);
     }
 

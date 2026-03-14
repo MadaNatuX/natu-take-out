@@ -21,6 +21,12 @@ public class OrderTask {
     @Autowired
     private OrderMapper orderMapper;
 
+    /*
+     * 定时任务分流原则：
+     * 支付超时取消对两种单型都生效；
+     * 自动完成只处理外卖，避免堂食单支付后进入 4 被夜间任务误完成。
+     */
+
     /**
      * 处理支付超时订单
      */
@@ -30,7 +36,7 @@ public class OrderTask {
         LocalDateTime time = LocalDateTime.now().plusMinutes(-15);
         // 每分钟，查询待支付并且超过15分钟的所有订单
         // select * from orders where status = 1 and order_time < 当前时间-15分钟
-        List<Order> ordersList = orderMapper.getByStatusAndOrderTimeLT(Order.PENDING_PAYMENT, time);
+        List<Order> ordersList = orderMapper.getByStatusAndOrderTimeLT(Order.PENDING_PAYMENT, time, null);
         // 超时的订单要改为取消，并设置取消原因和取消时间
         if(ordersList != null && !ordersList.isEmpty()){
             ordersList.forEach(order -> {
@@ -51,7 +57,7 @@ public class OrderTask {
         // 每日凌晨1点，查询正在派送中并且下单时间超过1小时的所有订单
         // select * from orders where status = 4 and order_time < 当前时间-1小时
         LocalDateTime time = LocalDateTime.now().plusMinutes(-60);
-        List<Order> ordersList = orderMapper.getByStatusAndOrderTimeLT(Order.DELIVERY_IN_PROGRESS, time);
+        List<Order> ordersList = orderMapper.getByStatusAndOrderTimeLT(Order.DELIVERY_IN_PROGRESS, time, Order.ORDER_TYPE_TAKEOUT);
         // 将其状态都改为已完成
         if(ordersList != null && !ordersList.isEmpty()){
             ordersList.forEach(order -> {

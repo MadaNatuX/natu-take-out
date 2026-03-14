@@ -124,7 +124,8 @@ create table orders (
     number varchar(50) default null comment '订单号',
     status int not null default '1' comment '订单状态 1待付款 2待接单 3已接单 4派送中 5已完成 6已取消 7退款',
     user_id bigint not null comment '下单用户',
-    address_book_id bigint not null comment '地址id',
+    -- 堂食单不依赖地址簿，所以这里需要允许为空。
+    address_book_id bigint default null comment '地址id',
     order_time datetime not null comment '下单时间',
     checkout_time datetime default null comment '结账时间',
     pay_method int not null default '1' comment '支付方式 1微信,2支付宝',
@@ -139,7 +140,11 @@ create table orders (
     rejection_reason varchar(255) default null comment '订单拒绝原因',
     cancel_time datetime default null comment '订单取消时间',
     estimated_delivery_time datetime default null comment '预计送达时间',
-    delivery_status tinyint(1) not null default '1' comment '配送状态  1立即送出  0选择具体时间',
+    -- 单双模型核心字段：order_type 负责区分业务分支。
+    order_type tinyint(1) not null default '1' comment '订单类型 1外卖订单 2堂食订单',
+    -- 堂食单号按天递增，外卖单保持为空。
+    in_number int default null comment '堂食订单号',
+    delivery_status tinyint(1) default '1' comment '配送状态  1立即送出  0选择具体时间',
     delivery_time datetime default null comment '送达时间',
     pack_amount int default null comment '打包费',
     tableware_number int default null comment '餐具数量',

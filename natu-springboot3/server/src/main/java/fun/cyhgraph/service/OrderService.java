@@ -14,7 +14,7 @@ public interface OrderService {
 
     OrderVO getById(Integer id);
 
-    PageResult userPage(int page, int pageSize, Integer status);
+    PageResult userPage(int page, int pageSize, Integer status, Integer orderType);
 
     void userCancelById(Integer id) throws Exception;
 
@@ -24,7 +24,7 @@ public interface OrderService {
 
     PageResult conditionSearch(OrderPageDTO orderPageDTO);
 
-    OrderStatisticsVO statistics();
+    OrderStatisticsVO statistics(Integer orderType);
 
     void confirm(OrderConfirmDTO orderConfirmDTO);
 

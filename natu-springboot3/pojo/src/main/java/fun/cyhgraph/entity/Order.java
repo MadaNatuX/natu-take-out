@@ -29,6 +29,12 @@ public class Order implements Serializable {
     public static final Integer DELIVERY_IN_PROGRESS = 4;
     public static final Integer COMPLETED = 5;
     public static final Integer CANCELLED = 6;
+    /**
+     * 订单类型常量：
+     * 通过这两个常量把外卖和堂食统一收口，避免业务层出现魔法值。
+     */
+    public static final Integer ORDER_TYPE_TAKEOUT = 1;
+    public static final Integer ORDER_TYPE_DINE_IN = 2;
 
     /**
      * 支付状态 0未支付 1已支付 2退款
@@ -56,6 +62,9 @@ public class Order implements Serializable {
     private String rejectionReason; // 订单拒绝原因
     private LocalDateTime cancelTime; // 订单取消时间
     private LocalDateTime estimatedDeliveryTime; // 预计送达时间
+    // 单双模型扩展字段：orderType 用于区分业务分支，inNumber 只在堂食单中有值。
+    private Integer orderType; // 订单类型 1外卖订单 2堂食订单
+    private Integer inNumber; // 堂食订单号
     private Integer deliveryStatus; // 配送状态  1立即送出  0选择具体时间
     private LocalDateTime deliveryTime; // 送达时间
     private int packAmount; // 打包费

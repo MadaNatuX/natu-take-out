@@ -20,6 +20,12 @@ public class OrderController {
     @Autowired
     private OrderService orderService;
 
+    /*
+     * 用户端控制器：
+     * 这里不新增任何新路由，而是继续复用原接口，
+     * 通过前端后续传入的 orderType 来决定查询或提交流程走哪种单型。
+     */
+
     /**
      * 用户下单
      *
@@ -77,11 +83,12 @@ public class OrderController {
      * @param page
      * @param pageSize
      * @param status   订单状态 1待付款 2待接单 3已接单 4派送中 5已完成 6已取消
+     * @param orderType 订单类型 1外卖 2堂食；不传时后端默认按外卖处理
      * @return
      */
     @GetMapping("/historyOrders")
-    public Result<PageResult> page(int page, int pageSize, Integer status) {
-        PageResult pageResult = orderService.userPage(page, pageSize, status);
+    public Result<PageResult> page(int page, int pageSize, Integer status, Integer orderType) {
+        PageResult pageResult = orderService.userPage(page, pageSize, status, orderType);
         return Result.success(pageResult);
     }
 

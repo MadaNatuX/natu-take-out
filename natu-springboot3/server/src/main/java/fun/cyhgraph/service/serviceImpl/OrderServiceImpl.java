@@ -7,31 +7,44 @@ import com.github.pagehelper.Page;
 import com.github.pagehelper.PageHelper;
 import fun.cyhgraph.constant.MessageConstant;
 import fun.cyhgraph.context.BaseContext;
-import fun.cyhgraph.dto.*;
-import fun.cyhgraph.entity.*;
+import fun.cyhgraph.dto.OrderCancelDTO;
+import fun.cyhgraph.dto.OrderConfirmDTO;
+import fun.cyhgraph.dto.OrderPageDTO;
+import fun.cyhgraph.dto.OrderPaymentDTO;
+import fun.cyhgraph.dto.OrderRejectionDTO;
+import fun.cyhgraph.dto.OrderSubmitDTO;
+import fun.cyhgraph.entity.AddressBook;
+import fun.cyhgraph.entity.Cart;
+import fun.cyhgraph.entity.Order;
+import fun.cyhgraph.entity.OrderDetail;
+import fun.cyhgraph.entity.User;
 import fun.cyhgraph.exception.AddressBookBusinessException;
 import fun.cyhgraph.exception.OrderBusinessException;
 import fun.cyhgraph.exception.ShoppingCartBusinessException;
-import fun.cyhgraph.mapper.*;
+import fun.cyhgraph.mapper.AddressBookMapper;
+import fun.cyhgraph.mapper.CartMapper;
+import fun.cyhgraph.mapper.OrderDetailMapper;
+import fun.cyhgraph.mapper.OrderMapper;
+import fun.cyhgraph.mapper.UserMapper;
 import fun.cyhgraph.result.PageResult;
 import fun.cyhgraph.service.OrderService;
 import fun.cyhgraph.utils.HttpClientUtil;
-import fun.cyhgraph.utils.WeChatPayUtil;
 import fun.cyhgraph.vo.OrderPaymentVO;
 import fun.cyhgraph.vo.OrderStatisticsVO;
 import fun.cyhgraph.vo.OrderSubmitVO;
 import fun.cyhgraph.vo.OrderVO;
 import fun.cyhgraph.websocket.WebSocketServer;
 import lombok.extern.slf4j.Slf4j;
-import org.aspectj.weaver.ast.Or;
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.CollectionUtils;
 
-import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -42,6 +55,11 @@ import java.util.stream.Collectors;
 @Slf4j
 public class OrderServiceImpl implements OrderService {
 
+    /*
+     * 核心依赖：
+     * 这一组 Mapper 和组件负责把“下单 -> 支付 -> 状态流转 -> 通知商家”的完整链路串起来。
+     * 本次改造里最关键的是 orderMapper、addressBookMapper 和 webSocketServer。
+     */
     @Autowired
     private OrderMapper orderMapper;
     @Autowired
@@ -51,97 +69,63 @@ public class OrderServiceImpl implements OrderService {
     @Autowired
     private AddressBookMapper addressBookMapper;
     @Autowired
-    private WeChatPayUtil weChatPayUtil;
-    @Autowired
     private UserMapper userMapper;
-    private Order order;
     @Autowired
     private WebSocketServer webSocketServer;
-    // 这个Value是annotation注解的包，不是lombok的！
     @Value("${hanye.shop.address}")
     private String shopAddress;
     @Value("${hanye.baidu.ak}")
     private String ak;
 
     /**
-     * 用户下单
+     * 用户下单主流程
      *
-     * @param orderSubmitDTO
-     * @return
+     * 这里统一接住外卖单和堂食单：
+     * 1. 先校验购物车是否为空
+     * 2. 再根据 orderType 构建不同类型的订单主体
+     * 3. 写入订单主表和订单明细
+     * 4. 最后清空购物车并返回订单基础信息
      */
+    @Override
+    @Transactional
     public OrderSubmitVO submit(OrderSubmitDTO orderSubmitDTO) {
-        // 1、查询校验地址情况
-        AddressBook addressBook = addressBookMapper.getById(orderSubmitDTO.getAddressId());
-        if (addressBook == null) {
-            throw new AddressBookBusinessException(MessageConstant.ADDRESS_BOOK_IS_NULL);
-        }
-        // 不能超出配送范围
-        // checkOutOfRange(addressBook.getCityName() + addressBook.getDistrictName() + addressBook.getDetail());
-        // 2、查询校验购物车情况
         Integer userId = BaseContext.getCurrentId();
-        Cart cart = new Cart();
-        cart.setUserId(userId);
-        List<Cart> cartList = cartMapper.list(cart);
-        if (cartList == null || cartList.isEmpty()) {
-            throw new ShoppingCartBusinessException(MessageConstant.CART_IS_NULL);
-        }
-        // 3、构建订单数据
-        Order order = new Order();
-        BeanUtils.copyProperties(orderSubmitDTO, order);
-        order.setAddressBookId(orderSubmitDTO.getAddressId());
-        order.setPhone(addressBook.getPhone());
-        order.setAddress(addressBook.getDetail());
-        order.setConsignee(addressBook.getConsignee());
-        // 利用时间戳来生成当前订单的编号
-        order.setNumber(String.valueOf(System.currentTimeMillis()));
-        order.setUserId(userId);
-        order.setStatus(Order.PENDING_PAYMENT); // 刚下单提交，此时是待付款状态
-        order.setPayStatus(Order.UN_PAID); // 未支付
-        order.setOrderTime(LocalDateTime.now());
-        this.order = order;
-        // 4、向订单表插入1条数据
+        List<Cart> cartList = getCartList(userId);
+        Integer orderType = normalizeOrderType(orderSubmitDTO.getOrderType());
+        
+        Order order = buildOrder(orderSubmitDTO, userId, orderType);
         orderMapper.insert(order);
-        // 订单明细数据
-        List<OrderDetail> orderDetailList = new ArrayList<>();
-        // 遍历购物车中所有的商品，逐个加到订单明细表
-        for (Cart c : cartList) {
-            OrderDetail orderDetail = new OrderDetail();
-            BeanUtils.copyProperties(c, orderDetail);
-            orderDetail.setOrderId(order.getId());
-            orderDetailList.add(orderDetail);
-        }
-        // 5、向明细表插入n条数据
+
+        List<OrderDetail> orderDetailList = buildOrderDetails(cartList, order.getId());
         orderDetailMapper.insertBatch(orderDetailList);
-        // 6、清理购物车中的数据
         cartMapper.delete(userId);
-        // 7、封装返回结果
-        OrderSubmitVO orderSubmitVO = OrderSubmitVO.builder()
+
+        return OrderSubmitVO.builder()
                 .id(order.getId())
                 .orderNumber(order.getNumber())
                 .orderAmount(order.getAmount())
                 .orderTime(order.getOrderTime())
                 .build();
-        return orderSubmitVO;
     }
 
     /**
      * 当前用户未支付订单数量
      *
-     * @return
+     * 这个接口不区分堂食/外卖，仍然保持“当前用户所有待支付订单”的统计语义。
      */
+    @Override
     public Integer unPayOrderCount() {
-        Integer userId = BaseContext.getCurrentId();
-        return orderMapper.getUnPayCount(userId);
+        return orderMapper.getUnPayCount(BaseContext.getCurrentId());
     }
 
     /**
-     * 根据id查询订单详情
+     * 根据 id 查询订单详情
      *
-     * @param id
-     * @return
+     * OrderVO 继承了 Order，因此这里会自然把 orderType、inNumber 一并返回给前端。
      */
+    @Override
     public OrderVO getById(Integer id) {
-        Order order = orderMapper.getById(id);
+        Order order = getOrderOrThrow(id);
         List<OrderDetail> orderDetailList = orderDetailMapper.getById(id);
         OrderVO orderVO = new OrderVO();
         BeanUtils.copyProperties(order, orderVO);
@@ -152,26 +136,22 @@ public class OrderServiceImpl implements OrderService {
     /**
      * 用户端条件分页查询历史订单
      *
-     * @param page
-     * @param pageSize
-     * @param status
-     * @return
+     * 前端可以通过 orderType 指定查询堂食或外卖；
+     * 如果前端暂时没传，normalizeOrderType 会默认按外卖处理，保证旧页面不受影响。
      */
-    public PageResult userPage(int page, int pageSize, Integer status) {
+    @Override
+    public PageResult userPage(int page, int pageSize, Integer status, Integer orderType) {
         PageHelper.startPage(page, pageSize);
-        // 要根据当前用户和状态条件来查询订单，因此设计OrderPageDTO来封装信息
         OrderPageDTO orderPageDTO = new OrderPageDTO();
         orderPageDTO.setUserId(BaseContext.getCurrentId());
         orderPageDTO.setStatus(status);
+        orderPageDTO.setOrderType(normalizeOrderType(orderType));
         Page<Order> orderPage = orderMapper.page(orderPageDTO);
-        // 查到所有订单orderPage后，封装成OrderVO列表返回
+
         List<OrderVO> list = new ArrayList<>();
-        // 其实就是将每个订单都加上订单详情OrderDetail
         if (orderPage != null && orderPage.getTotal() > 0) {
             for (Order order : orderPage) {
-                Integer orderId = order.getId(); // 订单id
-                // 查询订单明细
-                List<OrderDetail> orderDetails = orderDetailMapper.getById(orderId);
+                List<OrderDetail> orderDetails = orderDetailMapper.getById(order.getId());
                 OrderVO orderVO = new OrderVO();
                 BeanUtils.copyProperties(order, orderVO);
                 orderVO.setOrderDetailList(orderDetails);
@@ -182,39 +162,23 @@ public class OrderServiceImpl implements OrderService {
     }
 
     /**
-     * 用户根据订单id取消订单
+     * 用户取消订单
      *
-     * @param id
+     * 这里延续原有规则：只有低状态订单允许用户直接取消。
+     * 因为堂食单支付后直接到 4，所以堂食已支付订单默认不会走到这里的成功分支。
      */
+    @Override
     public void userCancelById(Integer id) throws Exception {
-        // 根据id查询订单
-        Order ordersDB = orderMapper.getById(id);
-        // 校验订单是否存在
-        if (ordersDB == null) {
-            throw new OrderBusinessException(MessageConstant.ORDER_NOT_FOUND);
-        }
-        // 订单状态 1待付款 2待接单 3已接单 4派送中 5已完成 6已取消  前两个状态才能直接退款，否则要联系商家
-        if (ordersDB.getStatus() > 2) {
+        Order orderDB = getOrderOrThrow(id);
+        if (orderDB.getStatus() > Order.TO_BE_CONFIRMED) {
             throw new OrderBusinessException(MessageConstant.ORDER_STATUS_ERROR);
         }
+
         Order order = new Order();
-        order.setId(ordersDB.getId());
-
-        // 订单处于待接单状态下取消，需要进行退款
-        if (ordersDB.getStatus().equals(Order.TO_BE_CONFIRMED)) {
-            // 调用微信支付退款接口（refund有异常需要抛出处理）
-            // 用不了
-//            weChatPayUtil.refund(
-//                    ordersDB.getNumber(), //商户订单号
-//                    ordersDB.getNumber(), //商户退款单号
-//                    new BigDecimal(0.01),//退款金额，单位 元
-//                    new BigDecimal(0.01));//原订单金额
-
-            // 支付状态修改为 退款
+        order.setId(orderDB.getId());
+        if (Order.TO_BE_CONFIRMED.equals(orderDB.getStatus())) {
             order.setPayStatus(Order.REFUND);
         }
-
-        // 更新订单状态、取消原因、取消时间
         order.setStatus(Order.CANCELLED);
         order.setCancelReason("用户取消");
         order.setCancelTime(LocalDateTime.now());
@@ -222,95 +186,76 @@ public class OrderServiceImpl implements OrderService {
     }
 
     /**
-     * 根据订单id再来一单
+     * 再来一单
      *
-     * @param id
+     * 该能力和订单类型无关，本质上是把历史订单详情重新拷贝回购物车。
      */
+    @Override
     public void reOrder(Integer id) {
         Integer userId = BaseContext.getCurrentId();
-        // 1、先拿到这个订单id的所有菜品
         List<OrderDetail> detailList = orderDetailMapper.getById(id);
-        // 2、将订单详情对象转换为购物车对象
-//        List<Cart> cartList = new ArrayList<>();
-//        for (OrderDetail orderDetail : detailList){
-//            Cart cart = new Cart();
-//            BeanUtils.copyProperties(orderDetail, cart, "id");
-//            cart.setUserId(userId);
-//            cart.setCreateTime(LocalDateTime.now());
-//            cartList.add(cart);
-//        }
         List<Cart> cartList = detailList.stream().map(x -> {
             Cart cart = new Cart();
-            // 将原订单详情里面的菜品信息重新复制到购物车对象中
             BeanUtils.copyProperties(x, cart, "id");
             cart.setUserId(userId);
             cart.setCreateTime(LocalDateTime.now());
             return cart;
         }).toList();
-        // 3、将购物车对象批量添加到数据库
         cartMapper.insertBatch(cartList);
     }
 
     /**
      * 用户支付订单
      *
-     * @param orderPaymentDTO
-     * @return
+     * 这里是这次改造的核心分流点：
+     * 外卖支付后进入 2 待接单，堂食支付后直接进入 4。
+     * 同时，这里改成了“按订单号查单”而不是依赖 service 成员变量，避免并发串单。
      */
+    @Override
     public OrderPaymentVO payment(OrderPaymentDTO orderPaymentDTO) {
-        // 当前登录用户id
         Integer userId = BaseContext.getCurrentId();
-        User user = userMapper.getById(userId);
-        // 调用微信支付接口，生成预支付交易单
-        // 暂时不做，而是把 weChatUtils 里相关的参数设置好，让后续代码不出问题
+        Order order = orderMapper.getByNumber(orderPaymentDTO.getOrderNumber());
+        if (order == null || !userId.equals(order.getUserId())) {
+            throw new OrderBusinessException(MessageConstant.ORDER_NOT_FOUND);
+        }
+
         JSONObject jsonObject = new JSONObject();
         jsonObject.put("code", "ORDERPAID");
-        // 抽取 paySuccess 的代码：不搞支付，修改订单状态后直接更新数据库，并返回给前端
         OrderPaymentVO vo = jsonObject.toJavaObject(OrderPaymentVO.class);
         vo.setPackageStr(jsonObject.getString("package"));
-        Integer OrderPaidStatus = Order.PAID; // 支付状态，已支付
-        Integer OrderStatus = Order.TO_BE_CONFIRMED;  // 订单状态，待接单
-        LocalDateTime checkOutTime = LocalDateTime.now(); // 更新支付时间
-        orderMapper.updateStatus(OrderStatus, OrderPaidStatus, checkOutTime, this.order.getId());
 
-        // 由于跳过了微信支付，因此没有通过微信来调用paySuccess方法，所以把里面的消息提醒方法抽出来放到这里！
-        // 通过websocket向客户端浏览器推送消息 type orderId content
-        Map map = new HashMap();
-        map.put("type", 1); // 消息类型，1表示来单提醒（2表示客户催单）
-        map.put("orderId", this.order.getId());
-        map.put("content", "订单号：" + this.order.getNumber());
-        String json = JSON.toJSONString(map);
-        log.info("发给商家端啊！：{}", map);
-        webSocketServer.sendToAllClient(json);
-
+        Integer orderStatus = isTakeoutOrder(order) ? Order.TO_BE_CONFIRMED : Order.DELIVERY_IN_PROGRESS;
+        orderMapper.updateStatus(orderStatus, Order.PAID, LocalDateTime.now(), order.getId());
+        notifyAdminNewOrder(order);
         return vo;
     }
 
     /**
-     * 条件分页查询订单信息
+     * 管理端条件分页查询订单信息
      *
-     * @param orderPageDTO
-     * @return
+     * 和用户端一样支持 orderType 过滤；
+     * 这样后续前端可以通过在不同页面写死 orderType，复用同一套接口。
      */
+    @Override
     public PageResult conditionSearch(OrderPageDTO orderPageDTO) {
+        orderPageDTO.setOrderType(normalizeOrderType(orderPageDTO.getOrderType()));
         PageHelper.startPage(orderPageDTO.getPage(), orderPageDTO.getPageSize());
         Page<Order> orders = orderMapper.page(orderPageDTO);
-        // 部分订单状态，需要额外返回订单菜品信息，将Orders转化为OrderVO
         List<OrderVO> orderVOList = getOrderVOList(orders);
         return new PageResult(orders.getTotal(), orderVOList);
     }
 
     /**
-     * 不同状态订单数量统计
+     * 订单状态统计
      *
-     * @return
+     * 统计口径跟随 orderType 走，默认仍按外卖统计，保证现有订单管理页的表现不变。
      */
-    public OrderStatisticsVO statistics() {
-        // 根据状态，分别查询出待接单、已接单/待派送、派送中的订单数量
-        Integer toBeConfirmed = orderMapper.countByStatus(Order.TO_BE_CONFIRMED);
-        Integer confirmed = orderMapper.countByStatus(Order.CONFIRMED);
-        Integer deliveryInProgress = orderMapper.countByStatus(Order.DELIVERY_IN_PROGRESS);
-        // 封装成VO返回
+    @Override
+    public OrderStatisticsVO statistics(Integer orderType) {
+        Integer queryOrderType = normalizeOrderType(orderType);
+        Integer toBeConfirmed = orderMapper.countByStatus(Order.TO_BE_CONFIRMED, queryOrderType);
+        Integer confirmed = orderMapper.countByStatus(Order.CONFIRMED, queryOrderType);
+        Integer deliveryInProgress = orderMapper.countByStatus(Order.DELIVERY_IN_PROGRESS, queryOrderType);
         return OrderStatisticsVO.builder()
                 .toBeConfirmed(toBeConfirmed)
                 .confirmed(confirmed)
@@ -321,9 +266,13 @@ public class OrderServiceImpl implements OrderService {
     /**
      * 接单
      *
-     * @param orderConfirmDTO
+     * 这里只允许外卖单从 2 -> 3。
+     * 堂食单即使调用到这里，也会被 validateTakeoutStatus 拦下来。
      */
+    @Override
     public void confirm(OrderConfirmDTO orderConfirmDTO) {
+        Order orderDB = getOrderOrThrow(orderConfirmDTO.getId());
+        validateTakeoutStatus(orderDB, Order.TO_BE_CONFIRMED);
         Order order = Order.builder()
                 .id(orderConfirmDTO.getId())
                 .status(Order.CONFIRMED)
@@ -334,20 +283,15 @@ public class OrderServiceImpl implements OrderService {
     /**
      * 拒单
      *
-     * @param orderRejectionDTO
+     * 仍然只允许外卖待接单执行拒单，拒单后统一走取消 + 退款状态。
      */
+    @Override
     public void reject(OrderRejectionDTO orderRejectionDTO) {
-        Integer orderId = orderRejectionDTO.getId();
-        Order orderDB = orderMapper.getById(orderId);
-        Order order = new Order();
-        // 订单只有存在且状态为2（待接单）才可以拒单
-        if (orderDB == null || !orderDB.getStatus().equals(Order.TO_BE_CONFIRMED)) {
-            throw new OrderBusinessException(MessageConstant.ORDER_STATUS_ERROR);
+        Order orderDB = getOrderOrThrow(orderRejectionDTO.getId());
+        validateTakeoutStatus(orderDB, Order.TO_BE_CONFIRMED);
 
-        }
-        // 拒单需要退款，根据订单id更新订单状态、拒单原因、取消时间
+        Order order = new Order();
         order.setId(orderDB.getId());
-        // 调用微信支付退款接口，但关于微信的接口都用不了，支付状态修改为 退款 就行
         order.setPayStatus(Order.REFUND);
         order.setStatus(Order.CANCELLED);
         order.setRejectionReason(orderRejectionDTO.getRejectionReason());
@@ -356,17 +300,15 @@ public class OrderServiceImpl implements OrderService {
     }
 
     /**
-     * 取消订单
+     * 后台取消订单
      *
-     * @param orderCancelDTO
+     * 后台取消不区分堂食/外卖，统一按退款取消处理。
      */
+    @Override
     public void cancel(OrderCancelDTO orderCancelDTO) {
-        Integer orderId = orderCancelDTO.getId();
-        Order orderDB = orderMapper.getById(orderId);
+        Order orderDB = getOrderOrThrow(orderCancelDTO.getId());
         Order order = new Order();
-        // 取消订单需要退款，根据订单id更新订单状态、取消原因、取消时间
         order.setId(orderDB.getId());
-        // 调用微信支付退款接口，但关于微信的接口都用不了，支付状态修改为 退款 就行
         order.setPayStatus(Order.REFUND);
         order.setStatus(Order.CANCELLED);
         order.setCancelReason(orderCancelDTO.getCancelReason());
@@ -375,16 +317,14 @@ public class OrderServiceImpl implements OrderService {
     }
 
     /**
-     * 根据id派送订单
+     * 外卖派送
      *
-     * @param id
+     * 这里只处理外卖 3 -> 4，堂食单不允许走派送节点。
      */
+    @Override
     public void delivery(Integer id) {
-        Order orderDB = orderMapper.getById(id);
-        // 订单存在 且 状态为3已接单，才能进行派送操作
-        if (orderDB == null || !orderDB.getStatus().equals(Order.CONFIRMED)) {
-            throw new OrderBusinessException(MessageConstant.ORDER_STATUS_ERROR);
-        }
+        Order orderDB = getOrderOrThrow(id);
+        validateTakeoutStatus(orderDB, Order.CONFIRMED);
         Order order = new Order();
         order.setId(orderDB.getId());
         order.setStatus(Order.DELIVERY_IN_PROGRESS);
@@ -394,34 +334,31 @@ public class OrderServiceImpl implements OrderService {
     /**
      * 完成订单
      *
-     * @param id
+     * 两种订单最终都从 4 -> 5，因此这里只校验当前状态是否是 4。
      */
+    @Override
     public void complete(Integer id) {
-        Order orderDB = orderMapper.getById(id);
-        // 订单存在 且 状态为4派送中，才能进行完成操作
-        if (orderDB == null || !orderDB.getStatus().equals(Order.DELIVERY_IN_PROGRESS)) {
+        Order orderDB = getOrderOrThrow(id);
+        if (!Order.DELIVERY_IN_PROGRESS.equals(orderDB.getStatus())) {
             throw new OrderBusinessException(MessageConstant.ORDER_STATUS_ERROR);
         }
         Order order = new Order();
         order.setId(orderDB.getId());
         order.setStatus(Order.COMPLETED);
-        order.setDeliveryTime(LocalDateTime.now()); // 设置订单完成时间
+        order.setDeliveryTime(LocalDateTime.now());
         orderMapper.update(order);
     }
 
     /**
      * 用户催单
-     * @param id
+     *
+     * 催单本质是一次 websocket 提醒，和单型无关。
      */
+    @Override
     public void reminder(Integer id) {
-        Order orderDB = orderMapper.getById(id);
-        // 订单不存在
-        if (orderDB == null) {
-            throw new OrderBusinessException(MessageConstant.ORDER_NOT_FOUND);
-        }
-        // 通过websocket向客户端浏览器推送消息 type orderId content
-        Map map = new HashMap();
-        map.put("type", 2); // 消息类型，2表示客户催单（1表示来单提醒）
+        Order orderDB = getOrderOrThrow(id);
+        Map<String, Object> map = new HashMap<>();
+        map.put("type", 2);
         map.put("orderId", id);
         map.put("content", "订单号：" + orderDB.getNumber());
         String json = JSON.toJSONString(map);
@@ -429,24 +366,167 @@ public class OrderServiceImpl implements OrderService {
         webSocketServer.sendToAllClient(json);
     }
 
+    /*
+     * 订单构建分支：
+     * 这里把“同一个 submit 接口里如何区分外卖/堂食”集中封装，
+     * 这样主流程里只保留骨架，具体填充规则都落在这里。
+     */
+    private Order buildOrder(OrderSubmitDTO orderSubmitDTO, Integer userId, Integer orderType) {
+        Order order = new Order();
+        BeanUtils.copyProperties(orderSubmitDTO, order);
+        order.setOrderType(orderType);
+        order.setUserId(userId);
+        order.setNumber(String.valueOf(System.currentTimeMillis()));
+        order.setStatus(Order.PENDING_PAYMENT);
+        order.setPayStatus(Order.UN_PAID);
+        order.setOrderTime(LocalDateTime.now());
+
+        User user = userMapper.getById(userId);
+        if (user != null) {
+            order.setUserName(user.getName());
+        }
+
+        if (Order.ORDER_TYPE_TAKEOUT.equals(orderType)) {
+            // 外卖单需要完整收货信息，地址簿也是外卖下单的必校验项。
+            fillTakeoutOrderInfo(order, orderSubmitDTO.getAddressId());
+            order.setInNumber(null);
+        } else if (Order.ORDER_TYPE_DINE_IN.equals(orderType)) {
+            // 堂食单不需要配送信息，因此这里显式清空相关字段，避免脏数据串入。
+            order.setAddressBookId(null);
+            order.setPhone(null);
+            order.setAddress(null);
+            order.setConsignee(null);
+            order.setEstimatedDeliveryTime(null);
+            order.setDeliveryStatus(null);
+            order.setInNumber(generateDineInOrderNumber());
+        } else {
+            throw new OrderBusinessException(MessageConstant.ORDER_TYPE_ERROR);
+        }
+        return order;
+    }
+
+    /*
+     * 外卖订单专属数据填充：
+     * 从地址簿中回填手机号、地址、收件人。
+     */
+    private void fillTakeoutOrderInfo(Order order, Integer addressId) {
+        AddressBook addressBook = addressBookMapper.getById(addressId);
+        if (addressBook == null) {
+            throw new AddressBookBusinessException(MessageConstant.ADDRESS_BOOK_IS_NULL);
+        }
+        // checkOutOfRange(addressBook.getCityName() + addressBook.getDistrictName() +
+        // addressBook.getDetail());
+        order.setAddressBookId(addressId);
+        order.setPhone(addressBook.getPhone());
+        order.setAddress(addressBook.getDetail());
+        order.setConsignee(addressBook.getConsignee());
+    }
+
+    /*
+     * 购物车校验与提取：
+     * 下单前必须先拿到当前用户购物车数据，否则后续没有办法生成订单明细。
+     */
+    private List<Cart> getCartList(Integer userId) {
+        Cart cart = new Cart();
+        cart.setUserId(userId);
+        List<Cart> cartList = cartMapper.list(cart);
+        if (CollectionUtils.isEmpty(cartList)) {
+            throw new ShoppingCartBusinessException(MessageConstant.CART_IS_NULL);
+        }
+        return cartList;
+    }
+
+    /*
+     * 订单明细构建：
+     * 把购物车条目逐条复制到 order_detail，形成订单快照。
+     */
+    private List<OrderDetail> buildOrderDetails(List<Cart> cartList, Integer orderId) {
+        List<OrderDetail> orderDetailList = new ArrayList<>();
+        for (Cart cart : cartList) {
+            OrderDetail orderDetail = new OrderDetail();
+            BeanUtils.copyProperties(cart, orderDetail);
+            orderDetail.setOrderId(orderId);
+            orderDetailList.add(orderDetail);
+        }
+        return orderDetailList;
+    }
+
+    /*
+     * 支付成功后的商家通知：
+     * 这里统一发送“来单提醒”，无论是外卖还是堂食，商家端都能收到。
+     */
+    private void notifyAdminNewOrder(Order order) {
+        Map<String, Object> map = new HashMap<>();
+        map.put("type", 1);
+        map.put("orderId", order.getId());
+        map.put("content", "订单号：" + order.getNumber());
+        String json = JSON.toJSONString(map);
+        log.info("发给商家端啊！：{}", map);
+        webSocketServer.sendToAllClient(json);
+    }
+
+    /*
+     * 订单类型归一化：
+     * 当前为了兼容旧前端，凡是没传 orderType 的地方都默认按外卖处理。
+     */
+    private Integer normalizeOrderType(Integer orderType) {
+        if (orderType == null) {
+            return Order.ORDER_TYPE_TAKEOUT;
+        }
+        if (!Order.ORDER_TYPE_TAKEOUT.equals(orderType) && !Order.ORDER_TYPE_DINE_IN.equals(orderType)) {
+            throw new OrderBusinessException(MessageConstant.ORDER_TYPE_ERROR);
+        }
+        return orderType;
+    }
+
+    /*
+     * 这些校验辅助方法用于把“查单 / 校验外卖状态 / 识别单型”集中处理，
+     * 避免每个业务方法里重复写同样的判空和分支判断。
+     */
+    private boolean isTakeoutOrder(Order order) {
+        return Order.ORDER_TYPE_TAKEOUT.equals(normalizeOrderType(order.getOrderType()));
+    }
+
+    private void validateTakeoutStatus(Order order, Integer expectedStatus) {
+        if (!isTakeoutOrder(order) || !expectedStatus.equals(order.getStatus())) {
+            throw new OrderBusinessException(MessageConstant.ORDER_STATUS_ERROR);
+        }
+    }
+
+    private Order getOrderOrThrow(Integer id) {
+        Order order = orderMapper.getById(id);
+        if (order == null) {
+            throw new OrderBusinessException(MessageConstant.ORDER_NOT_FOUND);
+        }
+        return order;
+    }
+
+    /*
+     * 堂食单号生成规则：
+     * 只统计当天堂食订单的最大 inNumber，然后 +1。
+     * 用 synchronized 是为了在单实例服务里尽量降低并发下重复取号的风险。
+     */
+    private synchronized Integer generateDineInOrderNumber() {
+        LocalDate today = LocalDate.now();
+        LocalDateTime beginTime = LocalDateTime.of(today, LocalTime.MIN);
+        LocalDateTime endTime = LocalDateTime.of(today, LocalTime.MAX);
+        Integer maxInNumber = orderMapper.getMaxInNumberByDate(Order.ORDER_TYPE_DINE_IN, beginTime, endTime);
+        return (maxInNumber == null ? 0 : maxInNumber) + 1;
+    }
+
     /**
-     * 抽出page.getResult()的内容，其中的订单菜品需要有详情信息
+     * 抽出 page.getResult() 的内容，统一补齐订单摘要字符串
      *
-     * @param page
-     * @return
+     * 管理端列表页不是直接展示完整明细，所以这里把菜品拼成一行摘要返回。
      */
     private List<OrderVO> getOrderVOList(Page<Order> page) {
-        // 需要返回订单菜品信息，自定义OrderVO响应结果
         List<OrderVO> orderVOList = new ArrayList<>();
         List<Order> ordersList = page.getResult();
         if (!CollectionUtils.isEmpty(ordersList)) {
-            for (Order orders : ordersList) {
-                // 将共同字段复制到OrderVO
+            for (Order order : ordersList) {
                 OrderVO orderVO = new OrderVO();
-                BeanUtils.copyProperties(orders, orderVO);
-                String orderDishes = getOrderDishesStr(orders);
-                // 将订单菜品信息封装到orderVO中，并添加到orderVOList
-                orderVO.setOrderDishes(orderDishes);
+                BeanUtils.copyProperties(order, orderVO);
+                orderVO.setOrderDishes(getOrderDishesStr(order));
                 orderVOList.add(orderVO);
             }
         }
@@ -454,87 +534,66 @@ public class OrderServiceImpl implements OrderService {
     }
 
     /**
-     * 根据订单id获取菜品信息字符串
-     *
-     * @param order
-     * @return
+     * 根据订单 id 获取菜品摘要字符串
      */
     private String getOrderDishesStr(Order order) {
-        // 查询订单菜品详情信息（订单中的菜品和数量）
         List<OrderDetail> orderDetailList = orderDetailMapper.getById(order.getId());
-        // 将每一条订单菜品信息拼接为字符串（格式：宫保鸡丁*3;）
-        List<String> orderDishList = orderDetailList.stream().map(x -> {
-            String orderDish = x.getName() + "*" + x.getNumber() + ";";
-            return orderDish;
-        }).collect(Collectors.toList());
-        // 将该订单对应的所有菜品信息拼接在一起
+        List<String> orderDishList = orderDetailList.stream()
+                .map(x -> x.getName() + "*" + x.getNumber() + ";")
+                .collect(Collectors.toList());
         return String.join("", orderDishList);
     }
 
     /**
      * 检查客户的收货地址是否超出配送范围
      *
-     * @param address
+     * 这是原有的外卖配送能力保留位，目前调用被注释掉了。
+     * 如果后面重新启用配送范围校验，可以直接恢复外卖下单里的调用。
      */
     private void checkOutOfRange(String address) {
-        Map map = new HashMap();
+        Map<String, String> map = new HashMap<>();
         map.put("address", shopAddress);
         map.put("output", "json");
         map.put("ak", ak);
 
-        // 获取店铺的经纬度坐标
         String shopCoordinate = HttpClientUtil.doGet("https://api.map.baidu.com/geocoding/v3", map);
-
         JSONObject jsonObject = JSON.parseObject(shopCoordinate);
         if (!jsonObject.getString("status").equals("0")) {
             throw new OrderBusinessException("店铺地址解析失败");
         }
 
-        // 数据解析
         JSONObject location = jsonObject.getJSONObject("result").getJSONObject("location");
         String lat = location.getString("lat");
         String lng = location.getString("lng");
-        // 店铺经纬度坐标
         String shopLngLat = lat + "," + lng;
 
         map.put("address", address);
-
-        // 获取用户收货地址的经纬度坐标
         String userCoordinate = HttpClientUtil.doGet("https://api.map.baidu.com/geocoding/v3", map);
-
         jsonObject = JSON.parseObject(userCoordinate);
         if (!jsonObject.getString("status").equals("0")) {
             throw new OrderBusinessException("收货地址解析失败");
         }
 
-        // 数据解析
         location = jsonObject.getJSONObject("result").getJSONObject("location");
         lat = location.getString("lat");
         lng = location.getString("lng");
-        // 用户收货地址经纬度坐标
         String userLngLat = lat + "," + lng;
 
         map.put("origin", shopLngLat);
         map.put("destination", userLngLat);
         map.put("steps_info", "0");
 
-        // 路线规划
         String json = HttpClientUtil.doGet("https://api.map.baidu.com/directionlite/v1/driving", map);
-
         jsonObject = JSON.parseObject(json);
         if (!jsonObject.getString("status").equals("0")) {
             throw new OrderBusinessException("配送路线规划失败");
         }
 
-        // 数据解析
         JSONObject result = jsonObject.getJSONObject("result");
         JSONArray jsonArray = (JSONArray) result.get("routes");
         Integer distance = (Integer) ((JSONObject) jsonArray.get(0)).get("distance");
-
         if (distance > 5000) {
-            //配送距离超过5000米
             throw new OrderBusinessException("超出配送范围");
         }
     }
-
 }
